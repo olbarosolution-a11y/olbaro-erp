@@ -1660,13 +1660,23 @@ async function loadActivityLog() {
   if (!IS_CONNECTED) return;
   const res = await api('getActivityLog');
   if (!res.success) return;
+  // activityLog 배열 동기화
+  if (res.data.length > 0) {
+    activityLog.length = 0;
+    res.data.forEach(l => activityLog.push({
+      time: l.time||'', id: l.userId||'', name: l.userName||l.name||'',
+      action: l.action||'', ip: l.ip||'—'
+    }));
+  }
+  // 이벤트 로그 탭 렌더
+  if (typeof renderEventLog === 'function') renderEventLog();
   const tbody = document.getElementById('activity-tbody');
   if (!tbody) return;
-  tbody.innerHTML = res.data.map(l => `
+  tbody.innerHTML = res.data.slice(0,200).map(l => `
     <tr>
-      <td style="font-size:11px;color:var(--text-muted)">${l.time}</td>
-      <td>${l.name}</td>
-      <td>${l.action}</td>
+      <td style="font-size:11px;color:var(--text-muted)">${l.time||'—'}</td>
+      <td>${l.userName||l.name||'—'}</td>
+      <td>${l.action||'—'}</td>
       <td style="font-size:11px;color:var(--text-muted)">${l.ip||'—'}</td>
     </tr>`).join('');
 }
@@ -1840,6 +1850,7 @@ function loadPageData(pageId) {
     case 'funnel':     loadInterviews(); break;
     case 'billing':    loadInvoices(); break;
     case 'admin':      loadActivityLog(); break;
+    case 'eventlog':   loadActivityLog(); break;
   }
 }
 
@@ -9844,6 +9855,7 @@ function initDemoData() {
     loadClients();
     loadPartners();
     loadHiring();
+    loadActivityLog();
   } else {
     renderCandidateTable();
     renderClientsTable();
