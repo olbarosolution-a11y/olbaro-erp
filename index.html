@@ -2627,6 +2627,11 @@ function saveRole() {
   renderUserTable();
   pushNotif('권한', '권한 변경', ACCOUNTS[editingUserId].name + '님 → ' + ROLE_LABELS[newRole].label);
   showToast(`${ACCOUNTS[editingUserId].name}님 권한 → ${ROLE_LABELS[newRole].label} 변경 완료`, 'success');
+  // Sheets 동기화
+  if (IS_CONNECTED) {
+    const u2 = ACCOUNTS[editingUserId];
+    api('updateAccount', { id: editingUserId, role: newRole, assignedClients: JSON.stringify(u2.assignedClients||[]), assignedPartners: JSON.stringify(u2.assignedPartners||[]) });
+  }
 }
 
 function toggleUserStatus(uid) {
@@ -2637,6 +2642,7 @@ function toggleUserStatus(uid) {
     activityLog.unshift({time:new Date().toLocaleString('ko-KR'),id:currentUser.id,name:currentUser.name,action:`${u.name} 계정 ${ns==='inactive'?'비활성화':'활성화'}`,ip:'—'});
     renderUserTable();
     showToast(u.name + ' 계정 ' + (ns==='inactive'?'비활성화':'활성화') + ' 완료', 'success');
+    if (IS_CONNECTED) api('updateAccount', { id: uid, status: ns });
   });
 }
 function deleteUser(uid) {
@@ -2648,6 +2654,7 @@ function deleteUser(uid) {
     pushNotif('권한', '계정 삭제: ' + name, '관리자 페이지에서 확인');
     renderUserTable();
     showToast(name + ' 계정이 삭제되었습니다', 'success');
+    if (IS_CONNECTED) api('deleteAccount', { id: uid });
   });
 }
 function openAddUserModal() {
@@ -2673,6 +2680,10 @@ function addUserDirect() {
   document.getElementById('modal-add-user').style.display='none';
   renderUserTable();
   showToast(name + ' 계정이 추가되었습니다 · 권한: ' + ROLE_LABELS[role].label, 'success');
+  // Sheets 동기화
+  if (IS_CONNECTED) {
+    api('addAccount', { id, pw, name, role, phone, company, color:colors[role]||'#6366f1', initial:name[0], lastLogin:'—', status:'active', assignedClients:'', assignedPartners:'' });
+  }
 }
 function renderSignupRequests() {
   const pending=signupRequests.filter(r=>!r.processed);
@@ -3101,11 +3112,15 @@ function updateNavBadges() {
 
 function pushActivity(action) {
   const user = currentUser || { name: '시스템', id: 'system' };
+  const now = new Date().toLocaleString('ko-KR');
   // activityLog (관리자 수정이력용) 유지
   activityLog.unshift({
-    time: new Date().toLocaleString('ko-KR'),
-    id: user.id, name: user.name, action: action, ip: '—'
+    time: now, id: user.id, name: user.name, action: action, ip: '—'
   });
+  // Sheets 동기화
+  if (IS_CONNECTED) {
+    api('addActivityLog', { userId: user.id, userName: user.name, action, ip: '—', detail: '' });
+  }
   // eventLog 중복 방지: 2초 이내 동일/유사 제목이 pushNotif로 이미 기록된 경우 건너뜀
   const now = new Date();
   if (eventLog.length > 0) {
@@ -7165,6 +7180,12 @@ function saveSchedule() {
   if (typeof addScheduleEditBtns === 'function') {
     setTimeout(addScheduleEditBtns, 100);
   }
+  // Sheets 동기화
+  if (IS_CONNECTED) {
+    const c2 = candidateDB[name]||{};
+    api('addInterview', { candidateName:name, clientName:client, partnerName:partner||'직접', interviewDate:date, interviewTime:time, job, gender:schGender||c2.gender||'', age:schAge||c2.ageText||'', phone:schPhone||c2.phone||'', result:'면접대기', memo:'' })
+      .then(r => { if (r.success && r.id) { window._interviewIdMap = window._interviewIdMap||{}; window._interviewIdMap[name] = r.id; } });
+  }
 }
 
 function addInterviewRow(name, job, client, partner, date, time, schGender, schAge, schPhone) {
@@ -7392,6 +7413,11 @@ function setInterviewResult(name, result) {
   pushActivity('면접결과: ' + name + '님 → ' + result);
   updateFunnelCounts();
   showToast(name + '님 → ' + result + ' 처리 완료', 'success');
+  // Sheets 동기화
+  if (IS_CONNECTED) {
+    const iid = window._interviewIdMap && window._interviewIdMap[name];
+    api('updateInterview', { id: iid||name, candidateName:name, result });
+  }
   });
 }
 
@@ -7437,6 +7463,12 @@ function setAttendResult(name, result) {
   pushActivity('출근확인: ' + name + '님 → ' + result);
   updateFunnelCounts();
   showToast(name + '님 → ' + result + ' 처리 완료', result === '정상출근' ? 'success' : 'warning');
+  // Sheets 동기화
+  if (IS_CONNECTED) {
+    const iid = window._interviewIdMap && window._interviewIdMap[name];
+    const today = new Date().toISOString().slice(0,10);
+    api('updateInterview', { id: iid||name, candidateName:name, result, attendDate:today });
+  }
 }
 
 // ─── 채용 등록 ───
@@ -10698,6 +10730,13 @@ function toggleInvoiceStatus(id, field, checked) {
 
   const label = field === 'issued' ? '세금계산서 발행' : '입금';
   const name2 = id.replace('inv-client-','').replace('inv-partner-','');
+  // Sheets 동기화
+  if (IS_CONNECTED) {
+    const itype = id.startsWith('inv-client-') ? 'client' : 'partner';
+    const iname = name2;
+    const month = document.getElementById('billing-month-sel')?.value || new Date().toISOString().slice(0,7);
+    api('addInvoice', { type:itype, clientName: itype==='client'?iname:'', partnerName: itype==='partner'?iname:'', issueDate: new Date().toISOString().slice(0,10), status: field+':'+(checked?'Y':'N'), memo: month }).catch(()=>{});
+  }
   pushNotif('정산', label + (checked?' 완료':' 취소') + ': ' + name2, '세금계산서 관리에서 확인',
     function() {
       try { localStorage.setItem(id+'-'+field, checked?'N':'Y'); } catch(e) {}
