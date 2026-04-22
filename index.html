@@ -1573,7 +1573,8 @@ async function loadCandidates() {
   res.data.forEach(c => {
     if (c.name) {
       candidateDB[c.name] = {
-        sheetId: c.id||'',
+        ...(candidateDB[c.name]||{}),  // 기존 로컬 데이터 기반
+        sheetId: c.id||'',             // sheetId는 항상 Sheets 값으로 덮어쓰기
         phone: c.phone||'—', email: c.email||'—',
         birthYear: c.birthYear||'—', birth: c.birthYear||'—',
         gender: c.gender||'—', address: c.address||'—',
@@ -1586,7 +1587,6 @@ async function loadCandidates() {
         assignedClient: c.assignedClient||'',
         memo: c.memo||'',
         applyDate: c.regDate||'',
-        ...(candidateDB[c.name]||{})  // 기존 데이터 보존
       };
     }
   });
@@ -1704,6 +1704,7 @@ async function loadPartners() {
     let clientFees = [];
     try { clientFees = JSON.parse(p.clientFees||'[]'); } catch(e) {}
     partnerDB.push({
+      sheetId: p.id||'',
       name: p.name||'', type: p.type||'법인',
       bizno: p.bizno||'', manager: p.manager||'',
       phone: p.phone||'', email: p.email||'',
@@ -1727,6 +1728,7 @@ async function loadClients() {
     try { jobWages = JSON.parse(c.jobWages||'[]'); } catch(e) {}
     try { jobTags = JSON.parse(c.jobTags||'[]'); } catch(e) {}
     clientsDB.push({
+      sheetId: c.id||'',
       name: c.name||'', address: c.address||'',
       bizNo: c.bizNo||'', manager: c.manager||'',
       ourManagers, clientMgr: c.clientMgr||'',
@@ -1766,7 +1768,7 @@ async function loadHiring() {
     const status = h.status||'근무중';
     const expireDate = h.expireDate||'';
     // rpoContracts 업데이트
-    rpoContracts.push({ id: h.id, name, client, partner, joinDate, expireDate, fee, months, status });
+    rpoContracts.push({ id: h.id, sheetId: h.id||'', name, client, partner, joinDate, expireDate, fee, months, status });
     // 인재DB 연동
     if (name && !candidateDB[name]) {
       candidateDB[name] = { status, client, partner, joinDate, phone: h.phone||'—', gender: h.gender||'—', ageText: h.age||'—', job: h.job||'—', birth: '', address: '—', email: '—', nation: '내국인', career: '—', edu: '—', memo: '' };
@@ -3783,7 +3785,7 @@ function savePartnerReg(editName) {
     pushNotif('협력사', '협력사 등록: ' + name, '신규 등록 완료',
       function() {
         const idx = partnerDB.findIndex(p => p.name === name);
-        if (idx > -1) { const sid = partnerDB[idx].sheetId; partnerDB.splice(idx, 1); renderPartnersTable(); if (IS_CONNECTED) api('deletePartner', { id: sid||p.name }); }
+        if (idx > -1) { const sid = partnerDB[idx].sheetId||partnerDB[idx].id; partnerDB.splice(idx, 1); renderPartnersTable(); if (IS_CONNECTED) api('deletePartner', { id: sid||p.name }); }
       }
     );
   }
