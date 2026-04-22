@@ -3112,10 +3112,10 @@ function updateNavBadges() {
 
 function pushActivity(action) {
   const user = currentUser || { name: '시스템', id: 'system' };
-  const now = new Date().toLocaleString('ko-KR');
+  const nowStr = new Date().toLocaleString('ko-KR');
   // activityLog (관리자 수정이력용) 유지
   activityLog.unshift({
-    time: now, id: user.id, name: user.name, action: action, ip: '—'
+    time: nowStr, id: user.id, name: user.name, action: action, ip: '—'
   });
   // Sheets 동기화
   if (IS_CONNECTED) {
