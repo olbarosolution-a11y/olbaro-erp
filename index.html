@@ -2036,7 +2036,7 @@ async function loadCandidates() {
   if (!res.success) return;
   const tbody = document.getElementById('cand-tbody');
   if (!tbody) return;
-  tbody.innerHTML = res.data.map(c => `
+  tbody.innerHTML = res['data'].map(c => `
     <tr data-job="${c.job||''}" data-status="${c.status||''}">
       <td><strong>${c.name}</strong> <button class="btn btn-ghost" style="font-size:10px;padding:2px 8px;margin-left:4px" onclick="openCandidateProfile('${c.name}')">보기</button></td>
       <td>${c.phone||''}</td>
@@ -2047,7 +2047,7 @@ async function loadCandidates() {
       <td><span style="font-size:11px;color:var(--text-muted)">${c.note||''}</span></td>
     </tr>`).join('');
   // candidateDB 업데이트 (프로필 모달용)
-  res.data.forEach(c => {
+  res['data'].forEach(c => {
     if (c.name) {
       candidateDB[c.name] = {
         ...(candidateDB[c.name]||{}),  // 기존 로컬 데이터 기반
@@ -2068,7 +2068,7 @@ async function loadCandidates() {
     }
   });
   const countEl = document.getElementById('cand-count');
-  if (countEl) countEl.textContent = res.data.length + '명 표시중';
+  if (countEl) countEl.textContent = res['data'].length + '명 표시중';
   // 백엔드 데이터 로드 완료 후 뱃지·테이블 갱신
   renderCandidateTable();
   updateNavBadges();
@@ -2079,10 +2079,10 @@ async function loadCandidates() {
 async function loadAttendance() {
   if (!IS_CONNECTED) return;
   const res = await api('getAttendance', { date: new Date().toLocaleDateString('ko-KR') });
-  if (!res.success || !res.data.length) return;
+  if (!res.success || !res['data'].length) return;
   const tbody = document.getElementById('attendance-tbody');
   if (!tbody) return;
-  tbody.innerHTML = res.data.map(a => `
+  tbody.innerHTML = res['data'].map(a => `
     <tr>
       <td><strong>${a.employeeName}</strong></td>
       <td>${a.client||''}</td>
@@ -2099,7 +2099,7 @@ async function loadCompliance() {
   if (!res.success) return;
   const container = document.getElementById('compliance-list');
   if (!container) return;
-  container.innerHTML = res.data.map(c => {
+  container.innerHTML = res['data'].map(c => {
     const isExpiring = c.status === '만료임박';
     const isValid = c.status === '유효';
     return `
@@ -2112,9 +2112,9 @@ async function loadRpo() {
   const res = await api('getRpo');
   if (!res.success) return;
   const tbody = document.getElementById('rpo-tbody');
-  if (tbody && res.data.length) {
+  if (tbody && res['data'].length) {
     // RPO 테이블 렌더 (기존 renderRpoTable 보완)
-    renderRpoTable(res.data);
+    renderRpoTable(res['data']);
   }
 }
 
@@ -2122,11 +2122,11 @@ async function loadActivityLog() {
   if (!IS_CONNECTED) return;
   const res = await api('getActivityLog');
   if (!res.success) return;
-  if (!res.data.length) return;
+  if (!res['data'].length) return;
 
   // activityLog 배열 동기화
   activityLog.length = 0;
-  res.data.forEach(l => activityLog.push({
+  res['data'].forEach(l => activityLog.push({
     time: l.time||'', id: l.userId||'', name: l.userName||l.name||'',
     action: l.action||'', ip: l.ip||'—'
   }));
@@ -2134,7 +2134,7 @@ async function loadActivityLog() {
   // eventLog 배열 동기화 (이벤트 로그 탭에서 사용)
   eventLog.length = 0;
   const typeKeys = ['인재','면접','합격','불합격','노쇼','출근','퇴사','채용','고객사','협력사','권한','이관','정산','세금계산서','입금','로그인','발송','수정'];
-  res.data.forEach((l, i) => {
+  res['data'].forEach((l, i) => {
     const action = l.action||'';
     const type = typeKeys.find(k => action.includes(k)) || '기타';
     const icon = '🔔';
@@ -2162,7 +2162,7 @@ async function loadPartners() {
   if (!res.success) return;
   // partnerDB를 Sheets 데이터로 교체
   partnerDB.length = 0;
-  res.data.forEach(p => {
+  res['data'].forEach(p => {
     let clientFees = [];
     try { clientFees = JSON.parse(p.clientFees||'[]'); } catch(e) {}
     partnerDB.push({
@@ -2183,7 +2183,7 @@ async function loadClients() {
   const res = await api('getClients');
   if (!res.success) return;
   clientsDB.length = 0;
-  res.data.forEach(c => {
+  res['data'].forEach(c => {
     let managers = [], ourManagers = [], jobWages = [], jobTags = [];
     try { managers = JSON.parse(c.managers||'[]'); } catch(e) {}
     try { ourManagers = JSON.parse(c.ourManagers||'[]'); } catch(e) {}
@@ -2220,7 +2220,7 @@ async function loadHiring() {
   rpoContracts.length = 0;
   const tbody = document.getElementById('tbody-hiring');
   if (tbody) tbody.innerHTML = '';
-  res.data.forEach(h => {
+  res['data'].forEach(h => {
     const name = h.candidateName||'';
     const client = h.clientName||'';
     const partner = h.partnerName||'직접';
@@ -2283,8 +2283,8 @@ async function loadInterviews() {
   const res = await api('getInterviews');
   if (!res.success) return;
   // 면접 데이터를 퍼널 렌더에 활용
-  window._interviewData = res.data;
-  renderFunnelFromData(res.data);
+  window._interviewData = res['data'];
+  renderFunnelFromData(res['data']);
 }
 
 function renderFunnelFromData(data) {
@@ -2307,7 +2307,7 @@ async function loadInvoices() {
   if (!IS_CONNECTED) return;
   const res = await api('getInvoices');
   if (!res.success) return;
-  window._invoiceData = res.data;
+  window._invoiceData = res['data'];
   refreshInvoiceTable();
 }
 
@@ -12005,9 +12005,9 @@ function openInvoiceMemo(id, name) {
 async function loadContracts() {
   if (!IS_CONNECTED) return;
   const res = await api('getContracts');
-  if (!res.success || !res.data.length) return;
+  if (!res.success || !res['data'].length) return;
   dcContracts.length = 0;
-  res.data.forEach(c => {
+  res['data'].forEach(c => {
     dcContracts.push({
       id: c.id, savedAt: c.savedAt, client: c.client,
       pt: c.type||'도급계산기', wk: Number(c.workers)||1,
