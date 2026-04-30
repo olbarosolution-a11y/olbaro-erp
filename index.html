@@ -2019,7 +2019,18 @@ var candidateDB={};
 // =============================================
 async function loadCandidates() {
   if (!IS_CONNECTED) return;
-  const res = await api('getCandidates');
+  // 페이징으로 전체 데이터 로드
+  let allData = [];
+  let page = 0;
+  const pageSize = 5000;
+  while (true) {
+    const res = await api('getCandidates', { page, pageSize });
+    if (!res.success) break;
+    allData = allData.concat(res.data);
+    if (!res.hasMore) break;
+    page++;
+  }
+  const res = { success: true, data: allData };
   if (!res.success) return;
   const tbody = document.getElementById('cand-tbody');
   if (!tbody) return;
