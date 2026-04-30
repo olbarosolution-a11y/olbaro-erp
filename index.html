@@ -2024,10 +2024,11 @@ async function loadCandidates() {
   let page = 0;
   const pageSize = 5000;
   while (true) {
-    const res = await api('getCandidates', { page, pageSize });
-    if (!res.success) break;
-    allData = allData.concat(res.data);
-    if (!res.hasMore) break;
+    const pageRes = await api('getCandidates', { page, pageSize });
+    if (!pageRes.success) break;
+    const chunk = pageRes['data'];
+    allData = allData.concat(chunk);
+    if (!pageRes['hasMore']) break;
     page++;
   }
   const res = { success: true, data: allData };
@@ -12238,7 +12239,51 @@ function dcRenderList() {
 }
 
 function dcLoad(id) {
-  const c = dcContracts.find(x=>x.id===id); if (!c||!c.d) return;
+  const c = dcContracts.find(x=>x.id===id); if (!c) return;
+
+  // 타입에 따라 해당 탭으로 이동
+  if (c.isMulti || c.pt === '인원별계산') {
+    setContractsTab('multi');
+    setTimeout(() => {
+      if (!c.d || !c.d.workers) return;
+      _multiWorkers.length = 0;
+      _multiIdSeq = 0;
+      c.d.workers.forEach(w => {
+        _multiIdSeq++;
+        _multiWorkers.push({ ...w, id: _multiIdSeq });
+      });
+      multiRender();
+      showToast(c.client + ' ' + c.wk + '인 불러왔습니다', 'success');
+    }, 100);
+    return;
+  }
+
+  if (c.isProrate || c.pt === '일할계산') {
+    setContractsTab('prorate');
+    setTimeout(() => {
+      const r = c.d;
+      if (!r) return;
+      const nameEl = document.getElementById('pr-name');
+      const clientEl = document.getElementById('pr-client');
+      const monthEl = document.getElementById('pr-month');
+      const etEl = document.getElementById('pr-employ-type');
+      const hourlyEl = document.getElementById('pr-hourly');
+      if (nameEl) nameEl.value = r.name || '';
+      if (monthEl) monthEl.value = r.ym || '';
+      if (hourlyEl) hourlyEl.value = r.ts || 10030;
+      if (etEl) etEl.value = r.et || 'insurance4';
+      if (clientEl) {
+        const opt = Array.from(clientEl.options).find(o => o.value === r.client);
+        clientEl.value = opt ? r.client : '';
+      }
+      prUpdateCalendar();
+      showToast('일할계산 내역을 불러왔습니다', 'success');
+    }, 100);
+    return;
+  }
+
+  // 기본: 도급 계산기
+  if (!c.d) return;
   const d=c.d;
   setContractsTab('calc');
   setTimeout(()=>{
@@ -13118,17 +13163,37 @@ function multiOpenImport(mode) {
 
 function multiImportFilter() {
   const q = (document.getElementById('multi-import-search')?.value || '').toLowerCase();
-  const filtered = q ? _multiImportData.filter(d => d.name.toLowerCase().includes(q) || d.client.toLowerCase().includes(q)) : _multiImportData;
-
   const tbody = document.getElementById('multi-import-tbody');
   if (!tbody) return;
 
-  if (!filtered.length) {
-    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted);font-size:12px">${_multiImportMode === 'hiring' ? '근무중인 인원이 없습니다' : '인재풀이 비어있습니다'}</td></tr>`;
+  // 인재풀 모드에서 검색어 없으면 안내만 표시 (24,000건 렌더 방지)
+  if (!q && _multiImportMode === 'pool') {
+    tbody.innerHTML = '<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted);font-size:12px">이름 검색 후 결과가 표시됩니다</td></tr>';
     return;
   }
 
-  tbody.innerHTML = filtered.map(d => {
+  // 채용목록 모드 또는 검색어 있을 때
+  const filtered = q
+    ? _multiImportData.filter(d => d.name.toLowerCase().includes(q) || (d.client||'').toLowerCase().includes(q))
+    : _multiImportData; // 채용목록은 건수가 적으므로 전체 표시
+
+  // 최대 200건만 표시
+  const limited = filtered.slice(0, 200);
+
+  if (!limited.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted);font-size:12px">${q ? '검색 결과가 없습니다' : _multiImportMode === 'hiring' ? '근무중인 인원이 없습니다' : '검색어를 입력하세요'}</td></tr>`;
+    return;
+  }
+
+  // 결과 수 표시
+  const countInfo = filtered.length > 200 ? ` (${filtered.length}건 중 200건 표시)` : ` (${filtered.length}건)`;
+  const titleEl = document.getElementById('multi-import-title');
+  if (titleEl) {
+    const baseTitle = _multiImportMode === 'hiring' ? '📋 채용목록에서 불러오기' : '👤 인재풀에서 불러오기';
+    titleEl.textContent = baseTitle + (q ? countInfo : '');
+  }
+
+  tbody.innerHTML = limited.map(d => {
     const checked = _multiImportSelected.has(d.name);
     const statusColor = d.status === '근무중' ? 'var(--success)' : d.status === '구직중' ? 'var(--info)' : 'var(--text-muted)';
     return `<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="multiImportToggle('${d.name}',this)">
