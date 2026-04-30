@@ -13028,8 +13028,10 @@ var _multiImportData = [];
 function multiOpenImport(mode) {
   _multiImportMode = mode;
   _multiImportSelected = new Set();
-  document.getElementById('multi-import-search').value = '';
-  document.getElementById('multi-import-count').textContent = '0명';
+  const searchEl = document.getElementById('multi-import-search');
+  const countEl2 = document.getElementById('multi-import-count');
+  if (searchEl) searchEl.value = '';
+  if (countEl2) countEl2.textContent = '0명';
 
   const title = document.getElementById('multi-import-title');
   if (title) title.textContent = mode === 'hiring' ? '📋 채용목록에서 불러오기' : '👤 인재풀에서 불러오기';
@@ -13153,8 +13155,10 @@ function prOpenImport(mode) {
   // 단, 선택 후 동작이 다름 (단일 선택 → 이름/고객사 자동 입력)
   _multiImportMode = mode;
   _multiImportSelected = new Set();
-  document.getElementById('multi-import-search').value = '';
-  document.getElementById('multi-import-count').textContent = '0명';
+  const searchEl = document.getElementById('multi-import-search');
+  const countEl2 = document.getElementById('multi-import-count');
+  if (searchEl) searchEl.value = '';
+  if (countEl2) countEl2.textContent = '0명';
 
   const title = document.getElementById('multi-import-title');
   if (title) title.textContent = mode === 'hiring' ? '📋 채용목록에서 불러오기 (1명 선택)' : '👤 인재풀에서 불러오기 (1명 선택)';
