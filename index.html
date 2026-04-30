@@ -13028,6 +13028,46 @@ var _multiImportData = [];
 function multiOpenImport(mode) {
   _multiImportMode = mode;
   _multiImportSelected = new Set();
+
+  // 모달이 없으면 동적 생성
+  let modal = document.getElementById('modal-multi-import');
+  if (!modal) {
+    modal = document.createElement('div');
+    modal.id = 'modal-multi-import';
+    modal.style.cssText = 'display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center';
+    modal.innerHTML = `
+      <div style="background:var(--primary);border:1px solid var(--border);border-radius:14px;padding:28px;width:620px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+          <div style="font-size:14px;font-weight:700" id="multi-import-title">인원 불러오기</div>
+          <button onclick="document.getElementById('modal-multi-import').style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px">✕</button>
+        </div>
+        <input type="text" id="multi-import-search" class="modal-input" placeholder="이름 검색..." oninput="multiImportFilter()" style="margin-bottom:12px">
+        <div style="overflow-y:auto;flex:1;border:1px solid var(--border);border-radius:8px">
+          <table style="width:100%;border-collapse:collapse;font-size:12px">
+            <thead style="position:sticky;top:0;background:var(--primary);z-index:1">
+              <tr style="border-bottom:2px solid var(--border)">
+                <th style="padding:8px;text-align:left;font-size:11px;color:var(--text-muted)">선택</th>
+                <th style="padding:8px;text-align:left;font-size:11px;color:var(--text-muted)">이름</th>
+                <th style="padding:8px;text-align:left;font-size:11px;color:var(--text-muted)">고객사</th>
+                <th style="padding:8px;text-align:left;font-size:11px;color:var(--text-muted)">협력사</th>
+                <th style="padding:8px;text-align:right;font-size:11px;color:var(--text-muted)">시급</th>
+                <th style="padding:8px;text-align:left;font-size:11px;color:var(--text-muted)">상태</th>
+              </tr>
+            </thead>
+            <tbody id="multi-import-tbody"></tbody>
+          </table>
+        </div>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+          <div style="font-size:11px;color:var(--text-muted)">선택된 인원: <strong id="multi-import-count" style="color:var(--highlight)">0명</strong></div>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-ghost" onclick="document.getElementById('modal-multi-import').style.display='none'" style="font-size:12px">취소</button>
+            <button class="btn btn-primary" onclick="multiImportConfirm()" style="font-size:12px">➕ 추가</button>
+          </div>
+        </div>
+      </div>`;
+    document.body.appendChild(modal);
+  }
+
   const searchEl = document.getElementById('multi-import-search');
   const countEl2 = document.getElementById('multi-import-count');
   if (searchEl) searchEl.value = '';
