@@ -2020,18 +2020,19 @@ var candidateDB={};
 async function loadCandidates() {
   if (!IS_CONNECTED) return;
   // 페이징으로 전체 데이터 로드
-  let allData = [];
-  let page = 0;
-  const pageSize = 5000;
-  while (true) {
-    const pageRes = await api('getCandidates', { page, pageSize });
-    if (!pageRes.success) break;
-    const chunk = pageRes['data'];
-    allData = allData.concat(chunk);
-    if (!pageRes['hasMore']) break;
-    page++;
+  var allCandidates = [];
+  var currentPage = 0;
+  var batchSize = 5000;
+  var keepGoing = true;
+  while (keepGoing) {
+    var batchResult = await api('getCandidates', { page: currentPage, pageSize: batchSize });
+    if (!batchResult || !batchResult.success) { keepGoing = false; break; }
+    var batchItems = batchResult.data || [];
+    for (var bi = 0; bi < batchItems.length; bi++) { allCandidates.push(batchItems[bi]); }
+    keepGoing = !!batchResult.hasMore;
+    currentPage++;
   }
-  const res = { success: true, data: allData };
+  const res = { success: true, data: allCandidates };
   if (!res.success) return;
   const tbody = document.getElementById('cand-tbody');
   if (!tbody) return;
