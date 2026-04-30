@@ -13112,10 +13112,9 @@ function multiImportToggle(name, row) {
   }
   const cnt = document.getElementById('multi-import-count');
   if (cnt) cnt.textContent = _multiImportSelected.size + '명';
-
-  // 체크박스 상태 동기화
   const cb = row?.querySelector('input[type="checkbox"]');
   if (cb) cb.checked = _multiImportSelected.has(name);
+  // 전체 행 재렌더 없이 현재 행만 업데이트
 }
 
 function multiImportConfirm() {
@@ -13180,17 +13179,17 @@ function prOpenImport(mode) {
   document.getElementById('modal-multi-import').style.display = 'flex';
 }
 
-// multiImportConfirm 오버라이드 - 일할계산 모드일 때 분기
-const _origMultiImportConfirm = window.multiImportConfirm || function(){};
-window.multiImportConfirm = function() {
+// multiImportConfirm - 모드에 따라 분기
+function multiImportConfirm() {
+  if (!_multiImportSelected.size) { showToast('인원을 선택해주세요','warning'); return; }
+
   if (window._prImportMode) {
+    // 일할계산 모드 - 1명만
     window._prImportMode = false;
-    if (!_multiImportSelected.size) { showToast('인원을 선택해주세요','warning'); return; }
-    const name = [..._multiImportSelected][0]; // 첫 번째 선택만
+    const name = [..._multiImportSelected][0];
     const d = _multiImportData.find(x => x.name === name);
     if (!d) return;
 
-    // 일할계산 필드에 자동 입력
     const nameEl = document.getElementById('pr-name');
     const clientEl = document.getElementById('pr-client');
     const hourlyEl = document.getElementById('pr-hourly');
@@ -13199,21 +13198,17 @@ window.multiImportConfirm = function() {
     if (nameEl) nameEl.value = d.name;
     if (hourlyEl) hourlyEl.value = d.hourly;
     if (etEl) etEl.value = d.et || 'insurance4';
-
-    // 고객사 드롭다운 선택
     if (clientEl) {
       const opt = Array.from(clientEl.options).find(o => o.value === d.client);
-      if (opt) clientEl.value = d.client;
-      else clientEl.value = '';
+      clientEl.value = opt ? d.client : '';
     }
-
     document.getElementById('modal-multi-import').style.display = 'none';
-    prCalc();
+    if (typeof prCalc === 'function') prCalc();
     showToast(d.name + '님 정보가 입력되었습니다', 'success');
+
   } else {
-    // 인원별 계산 모드
-    if (!_multiWorkers) return;
-    if (!_multiImportSelected.size) { showToast('인원을 선택해주세요','warning'); return; }
+    // 인원별 계산 모드 - 다중
+    if (!window._multiWorkers) window._multiWorkers = [];
     _multiImportSelected.forEach(name => {
       if (_multiWorkers.find(w => w.name === name)) return;
       const d = _multiImportData.find(x => x.name === name);
@@ -13222,10 +13217,10 @@ window.multiImportConfirm = function() {
       _multiWorkers.push({ id: _multiIdSeq, name: d.name, et: d.et||'insurance4', hourly: d.hourly||10030, basic: 209, ot: 0, night: 0, hol: 0, meal: 0 });
     });
     document.getElementById('modal-multi-import').style.display = 'none';
-    multiRender();
+    if (typeof multiRender === 'function') multiRender();
     showToast(_multiImportSelected.size + '명이 추가되었습니다', 'success');
   }
-};
+}
 
 </script>
 
