@@ -2,6 +2,7 @@
 <html lang="ko">
 <head>
 <meta charset="UTF-8">
+<!-- email obfuscation disabled -->
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>olbaro.solution-ERP</title>
 <link href="https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;600;700&family=Plus+Jakarta+Sans:wght@500;600;700;800&display=swap" rel="stylesheet">
@@ -348,6 +349,36 @@ body.light-mode .nav-item.active { color:#4f46e5; }
   backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
   box-shadow:var(--shadow-card); overflow:hidden;
 }
+.dc-card {
+  background:var(--card); border:1px solid var(--border);
+  border-radius:10px; padding:18px;
+  backdrop-filter:blur(12px); -webkit-backdrop-filter:blur(12px);
+  box-shadow:var(--shadow-card);
+}
+.dc-card .modal-input, .dc-card .filter-select {
+  border-radius:6px !important;
+}
+.dc-et-label {
+  display:flex; align-items:center; gap:8px;
+  padding:8px 12px; border:1px solid var(--border);
+  border-radius:6px; cursor:pointer; transition:border-color 0.15s;
+  font-size:11px;
+}
+.dc-et-label.active { border-color:var(--highlight); background:rgba(99,102,241,0.06); }
+.dc-row {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:5px 0; border-bottom:1px solid var(--border);
+  font-size:12px; gap:8px;
+}
+.dc-row:last-child { border-bottom:none; }
+.dc-row-label { color:var(--text-muted); font-size:11px; }
+.dc-row-val { font-weight:600; white-space:nowrap; }
+.dc-total {
+  display:flex; justify-content:space-between; align-items:center;
+  padding:8px 0; margin-top:6px;
+  border-top:2px solid var(--border-strong);
+  font-size:13px; font-weight:700;
+}
 .section-header {
   padding:16px 22px; border-bottom:1px solid var(--border);
   display:flex; align-items:center; justify-content:space-between;
@@ -607,7 +638,7 @@ body.light-mode .filter-select {
 
       <div class="login-accounts">
         <div class="login-accounts-title">관리자 계정</div>
-        <button class="login-account-btn" onclick="quickLogin('admin','admin1234')">
+        <button class="login-account-btn" data-id="admin" data-pw="admin1234" onclick="quickLogin(this.dataset.id,this.dataset.pw)">
           <div class="login-account-avatar" style="background:rgba(233,69,96,0.2);color:#e94560">관</div>
           <div><div class="login-account-name">관리자</div><div class="login-account-role">admin / admin1234 · 전체 권한</div></div>
         </button>
@@ -1082,20 +1113,458 @@ body.light-mode .filter-select {
       </div>
     </div>
 
-    <!-- 계약 관리 (차후 도급 업데이트 시 구현 예정) -->
+    <!-- 계약 관리 - 도급 급여 계산기 -->
     <div class="page" id="page-contracts">
-      <div class="section-card" style="text-align:center;padding:60px 20px">
-        <div style="font-size:48px;margin-bottom:16px">📝</div>
-        <div style="font-size:18px;font-weight:700;margin-bottom:8px">계약 관리</div>
-        <div style="font-size:13px;color:var(--text-muted);line-height:1.8;max-width:420px;margin:0 auto">
-          현재 채용대행 근로계약서는 원청과 직접 진행되어 미구현 상태입니다.<br>
-          <strong style="color:var(--warning)">차후 도급 계약 업데이트 시 구현 예정입니다.</strong><br><br>
-          계약서 파일 업로드 → Google Drive 저장 → 이메일 발송 방식으로 구성될 예정입니다.
+
+      <!-- 탭 헤더 -->
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px">
+        <div style="display:flex;gap:0;background:var(--input-bg);border:1px solid var(--border);border-radius:10px;padding:3px">
+          <button id="contracts-tab-calc" onclick="setContractsTab('calc')"
+            style="padding:7px 20px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:var(--highlight);color:#fff;font-family:inherit">🧮 도급 계산기</button>
+          <button id="contracts-tab-prorate" onclick="setContractsTab('prorate')"
+            style="padding:7px 20px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:transparent;color:var(--text-muted);font-family:inherit">📆 일할계산</button>
+          <button id="contracts-tab-multi" onclick="setContractsTab('multi')"
+            style="padding:7px 20px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:transparent;color:var(--text-muted);font-family:inherit">👥 인원별 계산</button>
+          <button id="contracts-tab-list" onclick="setContractsTab('list')"
+            style="padding:7px 20px;border-radius:8px;border:none;cursor:pointer;font-size:12px;font-weight:600;background:transparent;color:var(--text-muted);font-family:inherit">📋 계약 목록</button>
         </div>
-        <div style="margin-top:24px">
-          <span class="badge badge-warning" style="font-size:12px;padding:6px 16px">🚧 준비중</span>
+        <span style="font-size:11px;color:var(--text-muted);background:var(--input-bg);border:1px solid var(--border);border-radius:8px;padding:5px 12px">
+          📅 이번달 공휴일 <strong id="dc-this-month-holidays" style="color:var(--danger)">0</strong>일
+          <script>
+(() => { const h=["2026-01-01","2026-01-28","2026-01-29","2026-01-30","2026-03-01","2026-03-02","2026-05-05","2026-05-06","2026-06-06","2026-08-15","2026-08-17","2026-09-24","2026-09-25","2026-09-26","2026-10-03","2026-10-09","2026-12-25"]; const n=new Date(); const ym=n.getFullYear()+"-"+String(n.getMonth()+1).padStart(2,"0"); const cnt=h.filter(d=>d.startsWith(ym)).length; const el=document.getElementById("dc-this-month-holidays"); if(el) el.textContent=cnt+"일"; })();</script>
+        </span>
+      </div>
+
+      <!-- ── 계산기 뷰 ── -->
+      <div id="contracts-pane-calc">
+
+        <!-- 입력 영역: 3열 그리드 -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px">
+
+          <!-- 기업 조건 -->
+          <div class="dc-card">
+            <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;margin-bottom:14px">기업 조건</div>
+            <div style="display:flex;flex-direction:column;gap:10px">
+              <div>
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">고객사</div>
+                <select id="dc-client" class="filter-select" style="width:100%" onchange="dcLoadClientPreset()">
+                  <option value="">직접입력</option>
+                </select>
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">단가 방식</div>
+                <select id="dc-price-type" class="filter-select" style="width:100%" onchange="dcTogglePriceType()">
+                  <option value="hourly">시급제</option>
+                  <option value="monthly">월정액</option>
+                </select>
+              </div>
+              <div id="dc-hourly-wrap">
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">도급 시급 (원)</div>
+                <input type="number" id="dc-hourly-rate" class="modal-input" value="10030" oninput="dcCalc()" style="width:100%">
+              </div>
+              <div id="dc-monthly-wrap" style="display:none">
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">월 도급금액 (원)</div>
+                <input type="number" id="dc-monthly-rate" class="modal-input" value="0" oninput="dcCalc()" style="width:100%">
+              </div>
+              <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+                <div>
+                  <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">이윤율 (%)</div>
+                  <input type="number" id="dc-profit-rate" class="modal-input" value="10" oninput="dcCalc()" style="width:100%">
+                </div>
+                <div>
+                  <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">관리비 (원)</div>
+                  <input type="number" id="dc-mgmt-fee" class="modal-input" value="0" oninput="dcCalc()" style="width:100%">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 근무 조건 -->
+          <div class="dc-card">
+            <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;margin-bottom:14px">근무 조건</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+              <div>
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">월 기본시간</div>
+                <input type="number" id="dc-basic-hours" class="modal-input" value="209" oninput="dcCalc()" style="width:100%">
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">월 연장시간</div>
+                <input type="number" id="dc-overtime-hours" class="modal-input" value="0" oninput="dcCalc()" style="width:100%">
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">월 야간시간</div>
+                <input type="number" id="dc-night-hours" class="modal-input" value="0" oninput="dcCalc()" style="width:100%">
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">월 휴일시간</div>
+                <input type="number" id="dc-holiday-hours" class="modal-input" value="0" oninput="dcCalc()" style="width:100%">
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">주 소정시간</div>
+                <input type="number" id="dc-weekly-hours" class="modal-input" value="40" oninput="dcCalc()" style="width:100%">
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">근무 인원</div>
+                <input type="number" id="dc-workers" class="modal-input" value="1" oninput="dcCalc()" style="width:100%">
+              </div>
+            </div>
+          </div>
+
+          <!-- 수당 및 고용형태 -->
+          <div class="dc-card">
+            <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;margin-bottom:14px">수당 및 고용형태</div>
+            <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+              <div>
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">식대 비과세 (원)</div>
+                <input type="number" id="dc-meal" class="modal-input" value="0" oninput="dcCalc()" style="width:100%">
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">교통비 비과세 (원)</div>
+                <input type="number" id="dc-transport" class="modal-input" value="0" oninput="dcCalc()" style="width:100%">
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">기타수당 (원)</div>
+                <input type="number" id="dc-bonus" class="modal-input" value="0" oninput="dcCalc()" style="width:100%">
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">연차 (일/년)</div>
+                <input type="number" id="dc-annual-leave" class="modal-input" value="15" oninput="dcCalc()" style="width:100%">
+              </div>
+            </div>
+            <div style="display:flex;gap:14px;padding:10px 0;border-top:1px solid var(--border);border-bottom:1px solid var(--border);margin-bottom:12px">
+              <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer">
+                <input type="checkbox" id="dc-weekly-holiday" checked onchange="dcCalc()" style="accent-color:var(--highlight)"> 주휴수당
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer">
+                <input type="checkbox" id="dc-public-holiday" checked onchange="dcCalc()" style="accent-color:var(--highlight)"> 공휴일수당
+              </label>
+              <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer">
+                <input type="checkbox" id="dc-annual-pay" onchange="dcCalc()" style="accent-color:var(--highlight)"> 연차수당
+              </label>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:6px">
+              <label id="dc-et-label-insurance4" class="dc-et-label active">
+                <input type="radio" name="dc-employ-type" value="insurance4" checked onchange="dcCalc();dcEtHighlight()" style="accent-color:var(--highlight)">
+                <div><div style="font-size:11px;font-weight:600">4대보험 가입</div><div style="font-size:10px;color:var(--text-muted)">근로자 ~9.4% · 사업자 ~10.1%</div></div>
+              </label>
+              <label id="dc-et-label-income33" class="dc-et-label">
+                <input type="radio" name="dc-employ-type" value="income33" onchange="dcCalc();dcEtHighlight()" style="accent-color:var(--highlight)">
+                <div><div style="font-size:11px;font-weight:600">3.3% 사업소득</div><div style="font-size:10px;color:var(--text-muted)">소득세 3% + 지방세 0.3%</div></div>
+              </label>
+              <label id="dc-et-label-insurance4_claim" class="dc-et-label">
+                <input type="radio" name="dc-employ-type" value="insurance4_claim" onchange="dcCalc();dcEtHighlight()" style="accent-color:var(--highlight)">
+                <div><div style="font-size:11px;font-weight:600">3.3% + 4대보험 청구</div><div style="font-size:10px;color:var(--text-muted)">차액 수익으로 계상</div></div>
+              </label>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- 결과 영역: 3열 -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px;margin-bottom:14px">
+
+          <!-- 급여 계산 -->
+          <div class="dc-card">
+            <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;margin-bottom:14px">급여 계산 (1인)</div>
+            <div id="dc-result-wages"></div>
+          </div>
+
+          <!-- 청구 내역 -->
+          <div class="dc-card">
+            <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;margin-bottom:14px">고객사 청구 (1인)</div>
+            <div id="dc-result-billing"></div>
+          </div>
+
+          <!-- 수익 분석 -->
+          <div class="dc-card" style="border-color:rgba(99,102,241,0.3);background:rgba(99,102,241,0.04)">
+            <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--highlight);text-transform:uppercase;margin-bottom:14px">수익 분석</div>
+            <div id="dc-result-profit"></div>
+          </div>
+
+        </div>
+
+        <!-- 하단 버튼 -->
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn btn-ghost" style="padding:10px 24px;font-size:12px" onclick="dcExport()">📄 견적서 출력</button>
+          <button class="btn btn-primary" style="padding:10px 28px;font-size:12px" onclick="dcSaveContract()">💾 계약 저장</button>
+        </div>
+
+      </div>
+
+      <!-- ── 일할계산 뷰 ── -->
+      <div id="contracts-pane-prorate" style="display:none">
+
+        <!-- 상단 설정 바 -->
+        <div class="dc-card" style="margin-bottom:14px">
+          <div style="display:grid;grid-template-columns:auto auto 1fr auto auto auto auto auto auto auto;gap:14px;align-items:end">
+
+            <!-- 불러오기 + 고객사 + 근로자명 -->
+            <div style="display:flex;gap:4px;align-items:flex-end;padding-bottom:1px">
+              <button class="btn btn-ghost" style="font-size:11px;padding:6px 10px;white-space:nowrap" onclick="prOpenImport('hiring')">📋 채용목록</button>
+              <button class="btn btn-ghost" style="font-size:11px;padding:6px 10px;white-space:nowrap" onclick="prOpenImport('pool')">👤 인재풀</button>
+            </div>
+            <div style="min-width:130px">
+              <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">고객사</div>
+              <select id="pr-client" class="filter-select" style="width:100%" onchange="prLoadPreset()">
+                <option value="">직접입력</option>
+              </select>
+            </div>
+            <div style="min-width:110px">
+              <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">근로자명</div>
+              <input type="text" id="pr-name" class="modal-input" placeholder="이름" style="width:100%">
+            </div>
+            <div style="min-width:120px">
+              <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">정산 연월</div>
+              <input type="month" id="pr-month" class="modal-input" style="width:100%" onchange="prUpdateCalendar()">
+            </div>
+            <div style="min-width:140px">
+              <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">고용형태</div>
+              <select id="pr-employ-type" class="filter-select" style="width:100%" onchange="prCalc()">
+                <option value="insurance4">4대보험</option>
+                <option value="income33">3.3%</option>
+                <option value="insurance4_claim">3.3%+청구</option>
+              </select>
+            </div>
+            <div style="min-width:90px">
+              <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">입사일</div>
+              <input type="date" id="pr-join-date" class="modal-input" style="width:100%" onchange="prUpdateCalendar()">
+            </div>
+            <div style="min-width:90px">
+              <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">퇴사일</div>
+              <input type="date" id="pr-leave-date" class="modal-input" style="width:100%" onchange="prUpdateCalendar()">
+            </div>
+            <div style="min-width:80px">
+              <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">통상시급</div>
+              <input type="number" id="pr-hourly" class="modal-input" value="10030" oninput="prCalc()" style="width:100%">
+            </div>
+            <div style="min-width:60px">
+              <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">이윤율(%)</div>
+              <input type="number" id="pr-profit-rate" class="modal-input" value="10" oninput="prCalc()" style="width:100%">
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;padding-bottom:1px">
+              <label style="display:flex;align-items:center;gap:4px;font-size:11px;cursor:pointer;white-space:nowrap">
+                <input type="checkbox" id="pr-weekly-holiday" checked onchange="prCalc()" style="accent-color:var(--highlight)"> 주휴수당
+              </label>
+            </div>
+          </div>
+
+          <!-- 2행: 세부 조건 -->
+          <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;margin-top:12px;padding-top:12px;border-top:1px solid var(--border)">
+            <div>
+              <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">1일 소정시간</div>
+              <input type="number" id="pr-daily-hours" class="modal-input" value="8" oninput="prUpdateCalendar()" style="width:100%">
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">주 소정시간</div>
+              <input type="number" id="pr-weekly-hours" class="modal-input" value="40" oninput="prCalc()" style="width:100%">
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">식대 비과세</div>
+              <input type="number" id="pr-meal" class="modal-input" value="0" oninput="prCalc()" style="width:100%">
+            </div>
+            <div>
+              <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">교통비 비과세</div>
+              <input type="number" id="pr-transport" class="modal-input" value="0" oninput="prCalc()" style="width:100%">
+            </div>
+            <!-- 달력 집계 인라인 표시 -->
+            <div style="background:rgba(99,102,241,0.04);border:1px solid rgba(99,102,241,0.15);border-radius:8px;padding:8px 12px">
+              <div style="font-size:10px;color:var(--highlight);font-weight:700;margin-bottom:6px">달력 집계</div>
+              <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:4px;font-size:11px">
+                <span style="color:var(--text-muted)">근무 <strong id="pr-sum-days" style="color:var(--text)">0일</strong></span>
+                <span style="color:var(--text-muted)">기본 <strong id="pr-sum-basic" style="color:var(--text)">0h</strong></span>
+                <span style="color:var(--text-muted)">연장 <strong id="pr-sum-ot" style="color:var(--warning)">0h</strong></span>
+                <span style="color:var(--text-muted)">야간 <strong id="pr-sum-night" style="color:var(--info)">0h</strong></span>
+                <span style="color:var(--text-muted)">공휴일 <strong id="pr-sum-hol" style="color:var(--danger)">0h</strong></span>
+                <span style="color:var(--text-muted)">결근 <strong id="pr-sum-absent" style="color:var(--danger)">0일</strong></span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 하단: 달력 + 결과 -->
+        <div style="display:grid;grid-template-columns:1fr 260px;gap:14px;align-items:start">
+
+          <!-- 달력 -->
+          <div class="dc-card">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+              <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase">근무 달력 <span style="font-size:9px;font-weight:400">(날짜 클릭 → 시간 입력)</span></div>
+              <div style="display:flex;gap:10px;font-size:10px;color:var(--text-muted)">
+                <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:rgba(99,102,241,0.35);margin-right:3px"></span>기본</span>
+                <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:rgba(245,158,11,0.45);margin-right:3px"></span>연장</span>
+                <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:rgba(59,130,246,0.45);margin-right:3px"></span>야간</span>
+                <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:rgba(239,68,68,0.35);margin-right:3px"></span>공휴일</span>
+                <span><span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:rgba(100,116,139,0.25);margin-right:3px"></span>결근/제외</span>
+              </div>
+            </div>
+            <div id="pr-calendar"></div>
+
+            <!-- 날짜 입력 패널 -->
+            <div id="pr-day-panel" style="display:none;margin-top:14px;padding:14px;border:1px solid rgba(99,102,241,0.2);border-radius:8px;background:rgba(99,102,241,0.03)">
+              <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+                <strong id="pr-day-panel-title" style="font-size:13px"></strong>
+                <button onclick="prCloseDayPanel()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:16px">✕</button>
+              </div>
+              <div style="display:grid;grid-template-columns:repeat(4,1fr) auto;gap:8px;align-items:end">
+                <div>
+                  <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px">기본 (h)</div>
+                  <input type="number" id="pr-dp-basic" class="modal-input" min="0" max="24" step="0.5" style="width:100%;font-size:12px" oninput="prDayApply()">
+                </div>
+                <div>
+                  <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px">연장 (h)</div>
+                  <input type="number" id="pr-dp-ot" class="modal-input" min="0" max="12" step="0.5" style="width:100%;font-size:12px" oninput="prDayApply()">
+                </div>
+                <div>
+                  <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px">야간 (h)</div>
+                  <input type="number" id="pr-dp-night" class="modal-input" min="0" max="8" step="0.5" style="width:100%;font-size:12px" oninput="prDayApply()">
+                </div>
+                <div>
+                  <div style="font-size:10px;color:var(--text-muted);margin-bottom:3px">공휴일 (h)</div>
+                  <input type="number" id="pr-dp-hol" class="modal-input" min="0" max="24" step="0.5" style="width:100%;font-size:12px" oninput="prDayApply()">
+                </div>
+                <div style="display:flex;flex-direction:column;gap:6px">
+                  <label style="display:flex;align-items:center;gap:5px;font-size:11px;cursor:pointer">
+                    <input type="checkbox" id="pr-dp-absent" onchange="prDayApply()" style="accent-color:var(--danger)"> 결근
+                  </label>
+                  <button class="btn btn-ghost" style="font-size:10px;padding:4px 10px;color:var(--danger)" onclick="prDayClear()">초기화</button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- 결과 패널 -->
+          <div style="display:flex;flex-direction:column;gap:10px;position:sticky;top:16px">
+            <div class="dc-card">
+              <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;margin-bottom:12px">계산 결과</div>
+              <div id="pr-result"></div>
+            </div>
+            <button class="btn btn-primary" style="width:100%;height:38px;font-size:12px" onclick="prSave()">💾 저장</button>
+            <button class="btn btn-ghost" style="width:100%;height:38px;font-size:12px;color:var(--success);border-color:rgba(34,197,94,0.3)" onclick="prSendToInvoice()">🧾 세금계산서 발행</button>
+            <button class="btn btn-ghost" style="width:100%;height:38px;font-size:12px" onclick="prExport()">📄 명세서 출력</button>
+          </div>
+
         </div>
       </div>
+
+      <!-- ── 인원별 계산 뷰 ── -->
+      <!-- ── 인원별 계산 뷰 ── -->
+      <div id="contracts-pane-multi" style="display:none">
+
+        <!-- 공통 조건 + 인원 추가 -->
+        <div style="display:grid;grid-template-columns:1fr auto;gap:14px;align-items:start;margin-bottom:14px">
+          <div class="dc-card">
+            <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;margin-bottom:14px">공통 조건</div>
+            <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:10px;align-items:end">
+              <div>
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">고객사</div>
+                <select id="multi-client" class="filter-select" style="width:100%" onchange="multiLoadPreset()">
+                  <option value="">직접입력</option>
+                </select>
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">이윤율 (%)</div>
+                <input type="number" id="multi-profit" class="modal-input" value="10" oninput="multiCalcAll()" style="width:100%">
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">주 소정시간</div>
+                <input type="number" id="multi-weekly-h" class="modal-input" value="40" oninput="multiCalcAll()" style="width:100%">
+              </div>
+              <div>
+                <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">관리비 (원)</div>
+                <input type="number" id="multi-mgmt" class="modal-input" value="0" oninput="multiCalcAll()" style="width:100%">
+              </div>
+              <div>
+                <label style="display:flex;align-items:center;gap:6px;font-size:11px;cursor:pointer">
+                  <input type="checkbox" id="multi-weekly-holiday" checked onchange="multiCalcAll()" style="accent-color:var(--highlight)"> 주휴수당
+                </label>
+              </div>
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;padding-top:32px;position:relative">
+            <button class="btn btn-primary" style="white-space:nowrap;font-size:12px" onclick="multiAddWorker()">➕ 직접 추가</button>
+            <button class="btn btn-ghost" style="white-space:nowrap;font-size:12px" onclick="multiOpenImport('hiring')">📋 채용목록에서</button>
+            <button class="btn btn-ghost" style="white-space:nowrap;font-size:12px" onclick="multiOpenImport('pool')">👤 인재풀에서</button>
+          </div>
+        </div>
+
+        <!-- 인원 목록 테이블 -->
+        <div class="dc-card" style="margin-bottom:14px">
+          <div style="font-size:10px;font-weight:700;letter-spacing:1px;color:var(--text-muted);text-transform:uppercase;margin-bottom:14px">인원별 조건 입력</div>
+          <div style="overflow-x:auto">
+            <table style="width:100%;border-collapse:collapse;font-size:12px" id="multi-table">
+              <thead>
+                <tr style="border-bottom:2px solid var(--border)">
+                  <th style="text-align:left;padding:6px 8px;font-size:11px;color:var(--text-muted);font-weight:600;white-space:nowrap">이름</th>
+                  <th style="text-align:left;padding:6px 8px;font-size:11px;color:var(--text-muted);font-weight:600;white-space:nowrap">고용형태</th>
+                  <th style="text-align:right;padding:6px 8px;font-size:11px;color:var(--text-muted);font-weight:600;white-space:nowrap">시급 (원)</th>
+                  <th style="text-align:right;padding:6px 8px;font-size:11px;color:var(--text-muted);font-weight:600;white-space:nowrap">기본 (h)</th>
+                  <th style="text-align:right;padding:6px 8px;font-size:11px;color:var(--text-muted);font-weight:600;white-space:nowrap">연장 (h)</th>
+                  <th style="text-align:right;padding:6px 8px;font-size:11px;color:var(--text-muted);font-weight:600;white-space:nowrap">야간 (h)</th>
+                  <th style="text-align:right;padding:6px 8px;font-size:11px;color:var(--text-muted);font-weight:600;white-space:nowrap">공휴일 (h)</th>
+                  <th style="text-align:right;padding:6px 8px;font-size:11px;color:var(--text-muted);font-weight:600;white-space:nowrap">식대</th>
+                  <th style="text-align:right;padding:6px 8px;font-size:11px;color:var(--text-muted);font-weight:600;white-space:nowrap">총지급액</th>
+                  <th style="text-align:right;padding:6px 8px;font-size:11px;color:var(--text-muted);font-weight:600;white-space:nowrap">실수령액</th>
+                  <th style="text-align:right;padding:6px 8px;font-size:11px;color:var(--text-muted);font-weight:600;white-space:nowrap">청구(공급가)</th>
+                  <th style="text-align:right;padding:6px 8px;font-size:11px;color:var(--text-muted);font-weight:600;white-space:nowrap">순이익</th>
+                  <th style="padding:6px 8px"></th>
+                </tr>
+              </thead>
+              <tbody id="multi-tbody">
+                <tr><td colspan="13" style="text-align:center;color:var(--text-muted);padding:30px;font-size:12px">인원 추가 버튼을 눌러 시작하세요</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+
+        <!-- 합계 요약 -->
+        <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1fr 1fr;gap:12px;margin-bottom:14px" id="multi-summary-cards">
+          <div class="dc-card" style="text-align:center;padding:16px">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">총 인원</div>
+            <div style="font-size:22px;font-weight:700" id="multi-sum-count">0명</div>
+          </div>
+          <div class="dc-card" style="text-align:center;padding:16px">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">총 지급액 합계</div>
+            <div style="font-size:18px;font-weight:700;color:var(--text)" id="multi-sum-gross">0원</div>
+          </div>
+          <div class="dc-card" style="text-align:center;padding:16px">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">총 청구금액</div>
+            <div style="font-size:18px;font-weight:700;color:var(--highlight)" id="multi-sum-bill">0원</div>
+          </div>
+          <div class="dc-card" style="text-align:center;padding:16px">
+            <div style="font-size:10px;color:var(--text-muted);margin-bottom:6px">총 인건비</div>
+            <div style="font-size:18px;font-weight:700;color:var(--danger)" id="multi-sum-labor">0원</div>
+          </div>
+          <div class="dc-card" style="text-align:center;padding:16px;border-color:rgba(99,102,241,0.3);background:rgba(99,102,241,0.04)">
+            <div style="font-size:10px;color:var(--highlight);margin-bottom:6px">월 순이익 합계</div>
+            <div style="font-size:22px;font-weight:700" id="multi-sum-profit">0원</div>
+          </div>
+        </div>
+
+        <!-- 버튼 -->
+        <div style="display:flex;gap:10px;justify-content:flex-end">
+          <button class="btn btn-ghost" style="font-size:12px;padding:10px 20px" onclick="multiExport()">📄 견적서 출력</button>
+          <button class="btn btn-ghost" style="font-size:12px;padding:10px 20px;color:var(--success);border-color:rgba(34,197,94,0.3)" onclick="multiSendToInvoice()">🧾 세금계산서 발행</button>
+          <button class="btn btn-primary" style="font-size:12px;padding:10px 24px" onclick="multiSave()">💾 저장</button>
+        </div>
+      </div>
+
+      <!-- ── 계약 목록 뷰 ── -->
+      <div id="contracts-pane-list" style="display:none">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+          <div style="font-size:13px;font-weight:600">저장된 도급 계약 <span id="contracts-count" style="color:var(--text-muted);font-weight:400;font-size:12px"></span></div>
+          <button class="btn btn-primary" style="font-size:12px" onclick="setContractsTab('calc')">➕ 새 계산</button>
+        </div>
+        <div class="dc-card">
+          <table class="data-table">
+            <thead><tr>
+              <th>고객사</th><th>단가방식</th><th>인원</th><th>월청구(1인)</th><th>이윤율</th><th>고용형태</th><th>저장일</th><th>관리</th>
+            </tr></thead>
+            <tbody id="contracts-list-tbody">
+              <tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:40px;font-size:12px">저장된 계약이 없습니다.</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
     </div>
 
     <!-- 세금계산서·수익현황 통합 -->
@@ -1119,6 +1588,7 @@ body.light-mode .filter-select {
           <input type="month" id="invoice-month-filter" style="display:none" onchange="refreshInvoiceTable();syncBillingMonthLabel()">
         </div>
         <div style="display:flex;gap:6px">
+          <button class="btn btn-ghost" style="font-size:11px;color:var(--success);border-color:rgba(34,197,94,0.3)" onclick="openContractInvoiceList()">📋 계약 발행 내역</button>
           <button class="btn btn-ghost" style="font-size:11px;color:var(--danger);border-color:rgba(239,68,68,0.3)" onclick="openMinusInvoiceModal()">➖ 마이너스 메모</button>
           <button class="btn btn-ghost" style="font-size:11px" onclick="refreshInvoiceTable()">🔄 새로고침</button>
         </div>
@@ -1126,10 +1596,7 @@ body.light-mode .filter-select {
 
       <!-- 탭A: 정산금 (고객사) -->
       <div id="billing-sec-settle">
-        <!-- 월별 빠른 탭 -->
-        <div style="display:flex;gap:6px;margin-bottom:12px;align-items:center" id="billing-month-quick-tabs">
-          <!-- renderMonthQuickTabs()에서 동적 생성 -->
-        </div>
+
         <div class="section-card" style="margin-bottom:12px">
           <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:12px;padding:14px 16px">
             <div style="text-align:center">
@@ -1172,10 +1639,7 @@ body.light-mode .filter-select {
 
       <!-- 탭B: 협력사 지출 -->
       <div id="billing-sec-partner" style="display:none">
-        <!-- 월별 빠른 탭 -->
-        <div style="display:flex;gap:6px;margin-bottom:12px;align-items:center" id="billing-month-quick-tabs-p">
-          <!-- renderMonthQuickTabs('p')에서 동적 생성 -->
-        </div>
+
         <div class="section-card" style="margin-bottom:12px">
           <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;padding:14px 16px">
             <div style="text-align:center">
@@ -1597,22 +2061,7 @@ async function loadCandidates() {
   updateNavBadges();
 }
 
-async function loadClients() {
-  if (!IS_CONNECTED) return;
-  const res = await api('getClients');
-  if (!res.success) return;
-  const tbody = document.getElementById('clients-tbody');
-  if (!tbody) return;
-  tbody.innerHTML = res.data.map(c => `
-    <tr>
-      <td><strong>${c.name}</strong></td>
-      <td>${c.contractType||''}</td>
-      <td>${c.contact||''}</td>
-      <td>${c.manager||''}</td>
-      <td>${c.phone||''}</td>
-      <td><span class="badge badge-success">${c.status||''}</span></td>
-    </tr>`).join('');
-}
+// loadClients → 아래 확장 버전 사용
 
 async function loadAttendance() {
   if (!IS_CONNECTED) return;
@@ -1864,6 +2313,7 @@ function loadPageData(pageId) {
     case 'hiring':     loadHiring(); break;
     case 'funnel':     loadInterviews(); break;
     case 'billing':    loadInvoices(); break;
+    case 'contracts':  setContractsTab('calc'); break;
     case 'admin':      loadActivityLog(); break;
     case 'eventlog':   loadActivityLog(); break;
   }
@@ -2554,16 +3004,8 @@ function renderUserTable() {
     </tr>`;
   }).join('');
 }
-function deleteUser(uid) {
-  const u = ACCOUNTS[uid];
-  if (!u) return;
-  showConfirm(u.name + '(' + uid + ') 계정을 삭제하시겠습니까?\n삭제 후 복구할 수 없습니다.', function() {
-    delete ACCOUNTS[uid];
-    activityLog.unshift({time:new Date().toLocaleString('ko-KR'),id:currentUser.id,name:currentUser.name,action:'계정 삭제: ' + u.name + '(' + uid + ')',ip:'—'});
-    renderUserTable();
-    showToast(u.name + ' 계정이 삭제됐습니다', 'success');
-  });
-}
+// deleteUser → 아래 버전 사용
+
 
 function openRoleModal(uid) {
   editingUserId = uid;
@@ -3086,19 +3528,11 @@ document.addEventListener('DOMContentLoaded', () => {
     loadCompliance();
   }
   startClock();
-  // 기본 라이트모드 — 사용자가 명시적으로 다크 선택한 경우만 다크 유지
-  const savedTheme = localStorage.getItem('erp-theme');
-  if (savedTheme === 'dark') {
-    // 다크모드 유지 (사용자가 직접 선택한 경우)
-    document.getElementById('theme-toggle').textContent = '🌙';
-    applyLogoTheme(false);
-  } else {
-    // 기본값: 라이트모드
-    document.body.classList.add('light-mode');
-    document.getElementById('theme-toggle').textContent = '☀️';
-    applyLogoTheme(true);
-    if (!savedTheme) localStorage.setItem('erp-theme', 'light');
-  }
+  // 기본 라이트모드
+  localStorage.setItem('erp-theme', 'light');
+  document.body.classList.add('light-mode');
+  document.getElementById('theme-toggle').textContent = '☀️';
+  applyLogoTheme(true);
   // 알림 패널 외부 클릭 닫기
   document.addEventListener('click', (e) => {
     const panel = document.getElementById('notif-panel');
@@ -7960,9 +8394,7 @@ function jumpBillingMonth(year, month) {
     refreshInvoiceTable();
     syncBillingMonthLabel();
   }
-  renderMonthQuickTabs();
-  renderMonthQuickTabs('p');
-}
+    }
 
 function setBillingTab(tab) {
   _billingTab = tab;
@@ -9870,6 +10302,94 @@ function printResumeExcelStyle(name) {
   </div>
 
 </div>
+
+<!-- 계약 → 세금계산서 발행 모달 -->
+<div id="modal-contract-invoice" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:var(--primary);border:1px solid var(--border);border-radius:14px;padding:28px;width:480px;max-width:95vw">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-size:15px;font-weight:700">🧾 세금계산서 발행</div>
+      <button onclick="document.getElementById('modal-contract-invoice').style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px">✕</button>
+    </div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div style="background:var(--input-bg);border-radius:8px;padding:12px;font-size:12px" id="ci-summary"></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px">
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">발행 유형</div>
+          <select id="ci-type" class="modal-input" style="width:100%">
+            <option value="client">고객사 청구</option>
+            <option value="partner">협력사 지급</option>
+          </select>
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">대상</div>
+          <input type="text" id="ci-target" class="modal-input" style="width:100%" placeholder="고객사 또는 협력사명">
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">공급가액 (원)</div>
+          <input type="number" id="ci-amount" class="modal-input" style="width:100%" oninput="ciUpdateVat()">
+        </div>
+        <div>
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">부가세 (원)</div>
+          <input type="number" id="ci-vat" class="modal-input" style="width:100%">
+        </div>
+        <div style="grid-column:1/-1">
+          <div style="font-size:11px;color:var(--text-muted);margin-bottom:4px">메모</div>
+          <input type="text" id="ci-memo" class="modal-input" style="width:100%" placeholder="계약 관련 메모">
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px">
+        <button class="btn btn-ghost" onclick="document.getElementById('modal-contract-invoice').style.display='none'" style="padding:10px 20px">취소</button>
+        <button class="btn btn-primary" onclick="ciConfirm()" style="padding:10px 24px">🧾 발행</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- 계약 발행 내역 모달 -->
+<div id="modal-contract-invoice-list" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:var(--primary);border:1px solid var(--border);border-radius:14px;padding:28px;width:700px;max-width:95vw;max-height:80vh;overflow-y:auto">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px">
+      <div style="font-size:15px;font-weight:700">📋 계약 발행 내역</div>
+      <button onclick="document.getElementById('modal-contract-invoice-list').style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px">✕</button>
+    </div>
+    <div id="ci-list-content"></div>
+  </div>
+</div>
+
+
+<!-- 인원 불러오기 모달 -->
+<div id="modal-multi-import" style="display:none;position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:9999;align-items:center;justify-content:center">
+  <div style="background:var(--primary);border:1px solid var(--border);border-radius:14px;padding:28px;width:620px;max-width:95vw;max-height:80vh;display:flex;flex-direction:column">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <div style="font-size:14px;font-weight:700" id="multi-import-title">인원 불러오기</div>
+      <button onclick="document.getElementById('modal-multi-import').style.display='none'" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:18px">✕</button>
+    </div>
+    <input type="text" id="multi-import-search" class="modal-input" placeholder="이름 검색..." oninput="multiImportFilter()" style="margin-bottom:12px">
+    <div style="overflow-y:auto;flex:1;border:1px solid var(--border);border-radius:8px">
+      <table style="width:100%;border-collapse:collapse;font-size:12px">
+        <thead style="position:sticky;top:0;background:var(--primary);z-index:1">
+          <tr style="border-bottom:2px solid var(--border)">
+            <th style="padding:8px;text-align:left;font-size:11px;color:var(--text-muted)">선택</th>
+            <th style="padding:8px;text-align:left;font-size:11px;color:var(--text-muted)">이름</th>
+            <th style="padding:8px;text-align:left;font-size:11px;color:var(--text-muted)">고객사</th>
+            <th style="padding:8px;text-align:left;font-size:11px;color:var(--text-muted)">협력사</th>
+            <th style="padding:8px;text-align:right;font-size:11px;color:var(--text-muted)">시급</th>
+            <th style="padding:8px;text-align:left;font-size:11px;color:var(--text-muted)">상태</th>
+          </tr>
+        </thead>
+        <tbody id="multi-import-tbody"></tbody>
+      </table>
+    </div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-top:14px">
+      <div style="font-size:11px;color:var(--text-muted)">선택된 인원: <strong id="multi-import-count" style="color:var(--highlight)">0명</strong></div>
+      <div style="display:flex;gap:8px">
+        <button class="btn btn-ghost" onclick="document.getElementById('modal-multi-import').style.display='none'" style="font-size:12px">취소</button>
+        <button class="btn btn-primary" onclick="multiImportConfirm()" style="font-size:12px">➕ 추가</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 </body>
 </html>`;
 
@@ -11468,6 +11988,1234 @@ function openInvoiceMemo(id, name) {
   document.body.appendChild(modal);
   modal.addEventListener('click', e => { if(e.target===modal) modal.remove(); });
 }
+
+async function loadContracts() {
+  if (!IS_CONNECTED) return;
+  const res = await api('getContracts');
+  if (!res.success || !res.data.length) return;
+  dcContracts.length = 0;
+  res.data.forEach(c => {
+    dcContracts.push({
+      id: c.id, savedAt: c.savedAt, client: c.client,
+      pt: c.type||'도급계산기', wk: Number(c.workers)||1,
+      et: c.employType||'insurance4',
+      billTotal: Number(c.billTotal)||0,
+      billVat: Number(c.billVat)||0,
+      profitPer: Number(c.profit)||0,
+      totalProft: Number(c.profit)||0,
+      profitPct: Number(c.profitPct)||0,
+      d: {},
+    });
+  });
+}
+
+// ─── 계약관리 공통 유틸 ───────────────────────────────────────────────
+function genId() {
+  return Date.now().toString(36) + Math.random().toString(36).slice(2,6);
+}
+
+// ═══════════════════════════════════════════════════════════════════
+// 도급 계산기 (계약 관리 탭)
+// ═══════════════════════════════════════════════════════════════════
+
+const HOLIDAYS_2026 = [
+  '2026-01-01','2026-01-28','2026-01-29','2026-01-30',
+  '2026-03-01','2026-03-02','2026-05-05','2026-05-06',
+  '2026-06-06','2026-08-15','2026-08-17',
+  '2026-09-24','2026-09-25','2026-09-26',
+  '2026-10-03','2026-10-09','2026-12-25',
+];
+const HOLIDAY_NAMES_2026 = {
+  '2026-01-01':'신정','2026-01-28':'설 전날','2026-01-29':'설날','2026-01-30':'설 다음날',
+  '2026-03-01':'삼일절','2026-03-02':'삼일절 대체','2026-05-05':'어린이날',
+  '2026-05-06':'부처님오신날','2026-06-06':'현충일','2026-08-15':'광복절',
+  '2026-08-17':'광복절 대체','2026-09-24':'추석 전날','2026-09-25':'추석',
+  '2026-09-26':'추석 다음날','2026-10-03':'개천절','2026-10-09':'한글날','2026-12-25':'크리스마스',
+};
+const INS4 = {
+  ee: 0.045+0.03545+0.004591+0.009,  // 근로자 합계 ~9.4%
+  er: 0.045+0.03545+0.004591+0.009+0.007, // 사업자 합계 ~10.1%
+};
+var dcContracts = [];
+
+function setContractsTab(tab) {
+  ['calc','prorate','multi','list'].forEach(t => {
+    const btn = document.getElementById('contracts-tab-'+t);
+    const pane = document.getElementById('contracts-pane-'+t);
+    if (btn) { btn.style.background = t===tab?'var(--highlight)':'transparent'; btn.style.color = t===tab?'#fff':'var(--text-muted)'; }
+    if (pane) pane.style.display = t===tab?'':'none';
+  });
+  if (tab==='calc') dcInit();
+  if (tab==='prorate') prInit();
+  if (tab==='multi') multiInit();
+  if (tab==='list') dcRenderList();
+}
+
+function dcEtHighlight() {
+  ['insurance4','income33','insurance4_claim'].forEach(v => {
+    const el = document.getElementById('dc-et-label-'+v);
+    const checked = document.querySelector(`input[name="dc-employ-type"][value="${v}"]`)?.checked;
+    if (el) { el.classList.toggle('active', !!checked); }
+  });
+}
+
+function dcInit() {
+  const sel = document.getElementById('dc-client');
+  if (!sel) return;
+  const prev = sel.value;
+  sel.innerHTML = '<option value="">직접입력</option>';
+  clientsDB.forEach(c => { const o=document.createElement('option'); o.value=c.name; o.textContent=c.name; sel.appendChild(o); });
+  sel.value = prev;
+  const list = document.getElementById('dc-holiday-list');
+  if (list) list.innerHTML = HOLIDAYS_2026.map(d => { const [,m,dd]=d.split('-'); return `<span style="background:rgba(239,68,68,0.12);color:var(--danger);border-radius:4px;padding:2px 6px">${m}/${dd} ${HOLIDAY_NAMES_2026[d]||''}</span>`; }).join('');
+  const now = new Date();
+  const ym = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const cnt = HOLIDAYS_2026.filter(d=>d.startsWith(ym)).length;
+  const el = document.getElementById('dc-this-month-holidays'); if (el) el.textContent=cnt+'일';
+  dcCalc();
+}
+
+function dcLoadClientPreset() {
+  const name = document.getElementById('dc-client')?.value;
+  const c = clientsDB.find(x=>x.name===name);
+  if (!c) return;
+  if (c.fee) document.getElementById('dc-hourly-rate').value = c.fee;
+  dcCalc();
+}
+
+function dcTogglePriceType() {
+  const t = document.getElementById('dc-price-type')?.value;
+  document.getElementById('dc-hourly-wrap').style.display = t==='hourly'?'':'none';
+  document.getElementById('dc-monthly-wrap').style.display = t==='monthly'?'':'none';
+  dcCalc();
+}
+
+function dcN(id) { return parseFloat(document.getElementById(id)?.value||0)||0; }
+function dcCk(id) { return document.getElementById(id)?.checked||false; }
+function dcEt() { return document.querySelector('input[name="dc-employ-type"]:checked')?.value||'insurance4'; }
+
+function dcCalc() {
+  const pt = document.getElementById('dc-price-type')?.value||'hourly';
+  const hr = dcN('dc-hourly-rate'), mr = dcN('dc-monthly-rate');
+  const profR = dcN('dc-profit-rate')/100, mgmt = dcN('dc-mgmt-fee');
+  const bh = dcN('dc-basic-hours'), oh = dcN('dc-overtime-hours');
+  const nh = dcN('dc-night-hours'), hh = dcN('dc-holiday-hours');
+  const wh = dcN('dc-weekly-hours'), wk = Math.max(1,dcN('dc-workers'));
+  const meal=dcN('dc-meal'), trans=dcN('dc-transport'), bonus=dcN('dc-bonus');
+  const al=dcN('dc-annual-leave');
+  const useWH=dcCk('dc-weekly-holiday'), usePH=dcCk('dc-public-holiday'), useAP=dcCk('dc-annual-pay');
+  const et=dcEt();
+
+  const ts = pt==='hourly' ? hr : (bh>0 ? mr/bh : 10030);
+  const basicPay = pt==='hourly' ? ts*bh : mr;
+  const otPay = ts*oh*1.5;
+  const nightPay = ts*nh*0.5;
+  const holPay = usePH ? ts*hh*1.5 : 0;
+  const wkHolPay = (useWH && wh>=15) ? ts*(wh/40)*8*4.345 : 0;
+  const alPay = (useAP && al>0) ? ts*8*al/12 : 0;
+  const taxable = basicPay+otPay+nightPay+holPay+wkHolPay+alPay+bonus;
+  const nonTax = meal+trans;
+  const gross = taxable+nonTax;
+
+  let deductEE=0, deductER=0, claimIns=0, insProft=0;
+  if (et==='insurance4') { deductEE=Math.round(taxable*INS4.ee); deductER=Math.round(taxable*INS4.er); }
+  else if (et==='income33') { deductEE=Math.round(taxable*0.033); }
+  else if (et==='insurance4_claim') { deductEE=Math.round(taxable*0.033); claimIns=Math.round(taxable*INS4.er); insProft=claimIns; }
+
+  const net = gross-deductEE;
+  const totalLabor = gross+deductER;
+
+  let billBase;
+  if (pt==='hourly') {
+    billBase = hr*(bh+oh*1.5+nh*0.5+(usePH?hh*1.5:0));
+    if (useWH && wh>=15) billBase += wkHolPay;
+    if (useAP && alPay>0) billBase += alPay; // 연차수당 청구에 포함
+    billBase += meal+trans+bonus;
+  } else {
+    billBase = mr+meal+trans+bonus;
+    if (useAP && alPay>0) billBase += alPay;
+  }
+  const billIns = et==='insurance4_claim' ? claimIns : 0;
+  const billPre = billBase+billIns;
+  const billTotal = Math.round(billPre*(1+profR)+mgmt);
+  const vat = Math.round(billTotal*0.1);
+  const billVat = billTotal+vat;
+
+  const profitPer = billTotal-totalLabor+insProft;
+  const profitPct = billTotal>0 ? profitPer/billTotal*100 : 0;
+  const totalRev = billTotal*wk, totalCost = totalLabor*wk, totalProft = profitPer*wk;
+
+  const row = (l,v,c='') => `<div class="dc-row"><span class="dc-row-label">${l}</span><strong class="dc-row-val" style="color:${c||'var(--text)'}">${v}</strong></div>`;
+  const etLabel = et==='insurance4'?'4대보험 근로자':'3.3%';
+
+  document.getElementById('dc-result-wages').innerHTML = `
+    ${row('통상시급', ts.toLocaleString()+'원')}
+    ${row('기본급', basicPay.toLocaleString()+'원')}
+    ${otPay?row('연장수당 (×1.5)', '+'+otPay.toLocaleString()+'원','var(--warning)'):''}
+    ${nightPay?row('야간수당 (×0.5 가산)', '+'+nightPay.toLocaleString()+'원','var(--warning)'):''}
+    ${holPay?row('휴일수당 (×1.5)', '+'+holPay.toLocaleString()+'원','var(--warning)'):''}
+    ${wkHolPay?row('주휴수당', '+'+Math.round(wkHolPay).toLocaleString()+'원','var(--info)'):''}
+    ${alPay?row('연차수당 (월환산)', '+'+Math.round(alPay).toLocaleString()+'원','var(--info)'):''}
+    ${meal?row('식대 (비과세)', '+'+meal.toLocaleString()+'원'):''}
+    ${trans?row('교통비 (비과세)', '+'+trans.toLocaleString()+'원'):''}
+    ${bonus?row('기타수당', '+'+bonus.toLocaleString()+'원'):''}
+    <div class="dc-total"><span>총 지급액</span><span style="color:var(--highlight)">${gross.toLocaleString()}원</span></div>
+    ${row('공제 ('+etLabel+')', '-'+deductEE.toLocaleString()+'원','var(--danger)')}
+    ${deductER?row('사업자 4대보험', deductER.toLocaleString()+'원','var(--text-muted)'):''}
+    <div class="dc-total"><span>근로자 실수령액</span><span style="color:var(--success)">${net.toLocaleString()}원</span></div>`;
+
+  document.getElementById('dc-result-billing').innerHTML = `
+    ${row('도급 기준금액', billBase.toLocaleString()+'원')}
+    ${billIns?row('4대보험 청구분', '+'+billIns.toLocaleString()+'원','var(--warning)'):''}
+    ${row('기업이윤 ('+Math.round(profR*100)+'%)', '+'+(Math.round(billPre*profR)).toLocaleString()+'원','var(--info)')}
+    ${mgmt?row('관리비', '+'+mgmt.toLocaleString()+'원'):''}
+    ${row('청구 합계 (공급가)', billTotal.toLocaleString()+'원')}
+    ${row('부가세 (10%)', '+'+vat.toLocaleString()+'원','var(--text-muted)')}
+    <div class="dc-total"><span>VAT 포함 청구액</span><span style="color:var(--highlight)">${billVat.toLocaleString()}원</span></div>`;
+
+  document.getElementById('dc-result-profit').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+      <div style="text-align:center;padding:10px;background:var(--input-bg);border-radius:8px">
+        <div style="font-size:11px;color:var(--text-muted)">1인 월 청구</div>
+        <div style="font-size:16px;font-weight:700;color:var(--highlight)">${billTotal.toLocaleString()}원</div>
+      </div>
+      <div style="text-align:center;padding:10px;background:var(--input-bg);border-radius:8px">
+        <div style="font-size:11px;color:var(--text-muted)">1인 순이익</div>
+        <div style="font-size:16px;font-weight:700;color:${profitPer>=0?'var(--success)':'var(--danger)'}">${profitPer.toLocaleString()}원</div>
+      </div>
+    </div>
+    ${insProft?row('4대보험 차액 수익', '+'+insProft.toLocaleString()+'원','var(--warning)'):''}
+    ${row('이윤율', profitPct.toFixed(1)+'%', profitPct>=10?'var(--success)':'var(--warning)')}
+    <div style="border-top:2px solid var(--border);margin-top:8px;padding-top:8px">
+      <div style="font-size:12px;font-weight:700;margin-bottom:6px;color:var(--text-muted)">${wk}인 합계</div>
+      ${row('총 청구금액', totalRev.toLocaleString()+'원')}
+      ${row('총 인건비', totalCost.toLocaleString()+'원','var(--danger)')}
+      <div style="display:flex;justify-content:space-between;padding:6px 0;margin-top:4px"><span style="font-weight:700">월 순이익 합계</span><strong style="font-size:16px;color:${totalProft>=0?'var(--success)':'var(--danger)'}">${totalProft.toLocaleString()}원</strong></div>
+    </div>`;
+
+  window._dcLast = { pt,hr,mr,profR,mgmt,bh,oh,nh,hh,wh,wk,meal,trans,bonus,al,useWH,usePH,useAP,et,ts,gross,net,totalLabor,billTotal,billVat,profitPer,totalProft,profitPct,insProft,client:document.getElementById('dc-client')?.value||'' };
+}
+
+function dcSaveContract() {
+  const r = window._dcLast;
+  if (!r) { showToast('먼저 계산을 완료해주세요','warning'); return; }
+  const newId = genId();
+  const newContract = { id:newId, savedAt:new Date().toLocaleString('ko-KR'), client:r.client||'직접입력', pt:r.pt, hr:r.hr, wk:r.wk, et:r.et, billTotal:r.billTotal, billVat:r.billVat, profitPer:r.profitPer, totalProft:r.totalProft, profitPct:r.profitPct, d:r };
+  dcContracts.unshift(newContract);
+  if (IS_CONNECTED) api('addContract', { id:newId, savedAt:newContract.savedAt, client:newContract.client, type:'도급계산기', workers:r.wk, employType:r.et, billTotal:r.billTotal, billVat:r.billVat, profit:r.totalProft, profitPct:r.profitPct, memo:'' });
+  pushActivity('도급 계약 저장: '+(r.client||'직접입력')+' '+r.wk+'인');
+  showToast('계약이 저장되었습니다','success');
+  setContractsTab('list');
+}
+
+function dcRenderList() {
+  const tbody = document.getElementById('contracts-list-tbody');
+  if (!tbody) return;
+  const cnt = document.getElementById('contracts-count'); if (cnt) cnt.textContent=dcContracts.length+'건';
+  if (!dcContracts.length) { tbody.innerHTML='<tr><td colspan="8" style="text-align:center;color:var(--text-muted);padding:30px;font-size:12px">저장된 계약이 없습니다.</td></tr>'; return; }
+  const el = {'insurance4':'4대보험','income33':'3.3%','insurance4_claim':'3.3%+청구'};
+  tbody.innerHTML = dcContracts.map(c=>`<tr>
+    <td><strong>${c.client}</strong></td>
+    <td style="font-size:11px">${c.pt==='hourly'?'시급제':'월정액'}</td>
+    <td style="text-align:center">${c.wk}인</td>
+    <td style="font-size:12px;color:var(--highlight)">${c.billTotal.toLocaleString()}원</td>
+    <td style="font-size:12px;color:${c.profitPct>=10?'var(--success)':'var(--warning)'}">${c.profitPct.toFixed(1)}%</td>
+    <td><span class="badge badge-info" style="font-size:10px">${el[c.et]||c.et}</span></td>
+    <td style="font-size:11px;color:var(--text-muted)">${c.savedAt}</td>
+    <td><button class="btn btn-ghost" style="font-size:10px;padding:2px 6px" onclick="dcLoad('${c.id}')">불러오기</button> <button class="btn btn-ghost" style="font-size:10px;padding:2px 6px;color:var(--danger)" onclick="dcDel('${c.id}')">🗑️</button></td>
+  </tr>`).join('');
+}
+
+function dcLoad(id) {
+  const c = dcContracts.find(x=>x.id===id); if (!c||!c.d) return;
+  const d=c.d;
+  setContractsTab('calc');
+  setTimeout(()=>{
+    document.getElementById('dc-client').value=d.client||'';
+    document.getElementById('dc-price-type').value=d.pt||'hourly'; dcTogglePriceType();
+    document.getElementById('dc-hourly-rate').value=d.hr||10030;
+    document.getElementById('dc-monthly-rate').value=d.mr||0;
+    document.getElementById('dc-profit-rate').value=Math.round((d.profR||0.1)*100);
+    document.getElementById('dc-mgmt-fee').value=d.mgmt||0;
+    document.getElementById('dc-basic-hours').value=d.bh||209;
+    document.getElementById('dc-overtime-hours').value=d.oh||0;
+    document.getElementById('dc-night-hours').value=d.nh||0;
+    document.getElementById('dc-holiday-hours').value=d.hh||0;
+    document.getElementById('dc-weekly-hours').value=d.wh||40;
+    document.getElementById('dc-workers').value=d.wk||1;
+    document.getElementById('dc-meal').value=d.meal||0;
+    document.getElementById('dc-transport').value=d.trans||0;
+    document.getElementById('dc-bonus').value=d.bonus||0;
+    document.getElementById('dc-annual-leave').value=d.al||15;
+    document.getElementById('dc-weekly-holiday').checked=d.useWH!==false;
+    document.getElementById('dc-public-holiday').checked=d.usePH!==false;
+    document.getElementById('dc-annual-pay').checked=!!d.useAP;
+    const r=document.querySelector(`input[name="dc-employ-type"][value="${d.et||'insurance4'}"]`); if(r) r.checked=true;
+    dcCalc();
+  },50);
+}
+
+function dcDel(id) { showConfirm('삭제하시겠습니까?',()=>{ dcContracts=dcContracts.filter(x=>x.id!==id); dcRenderList(); showToast('삭제되었습니다','success'); }); }
+
+function dcExport() {
+  const r=window._dcLast; if (!r) { showToast('먼저 계산을 완료해주세요','warning'); return; }
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>도급 견적서</title>
+  <style>*{color-scheme:light}body{font-family:'Malgun Gothic',sans-serif;padding:40px;max-width:700px;margin:0 auto;background:#fff;color:#1e293b}h2{color:#333}table{width:100%;border-collapse:collapse;margin:16px 0}td,th{border:1px solid #ddd;padding:8px 12px;font-size:13px;color:#1e293b}th{background:#f5f5f5}.total{font-weight:700;font-size:15px;background:#eef2ff!important}@media print{button{display:none}}</style>
+  </head><body><h2>📋 도급 계약 견적서</h2>
+  <p style="color:#666;font-size:12px">작성일: ${new Date().toLocaleDateString('ko-KR')} | 고객사: ${r.client||'미입력'} | ${r.wk}인 기준</p>
+  <table>
+    <tr><th colspan="2">급여 구성 (1인)</th></tr>
+    <tr><td>통상시급</td><td style="text-align:right">${r.ts.toLocaleString()}원</td></tr>
+    <tr><td>총 지급액</td><td style="text-align:right">${r.gross.toLocaleString()}원</td></tr>
+    <tr><td>근로자 실수령액</td><td style="text-align:right">${r.net.toLocaleString()}원</td></tr>
+    <tr><td>사업자 총 인건비</td><td style="text-align:right">${r.totalLabor.toLocaleString()}원</td></tr>
+    <tr><th colspan="2">청구 내역 (1인)</th></tr>
+    <tr><td>공급가액</td><td style="text-align:right">${r.billTotal.toLocaleString()}원</td></tr>
+    <tr><td>부가세 (10%)</td><td style="text-align:right">${Math.round(r.billTotal*0.1).toLocaleString()}원</td></tr>
+    <tr class="total"><td>청구 합계 (VAT 포함)</td><td style="text-align:right">${r.billVat.toLocaleString()}원</td></tr>
+    <tr><th colspan="2">${r.wk}인 수익 분석</th></tr>
+    <tr><td>월 총 청구</td><td style="text-align:right">${(r.billTotal*r.wk).toLocaleString()}원</td></tr>
+    <tr><td>월 총 인건비</td><td style="text-align:right">${(r.totalLabor*r.wk).toLocaleString()}원</td></tr>
+    ${r.insProft?`<tr><td>4대보험 차액 수익</td><td style="text-align:right">+${(r.insProft*r.wk).toLocaleString()}원</td></tr>`:''}
+    <tr class="total"><td>월 순이익 합계</td><td style="text-align:right">${r.totalProft.toLocaleString()}원 (이윤율 ${r.profitPct.toFixed(1)}%)</td></tr>
+  </table>
+  <button onclick="window.print()" style="padding:8px 20px;background:#6366f1;color:#fff;border:none;border-radius:6px;cursor:pointer">🖨️ 인쇄</button>
+  </body></html>`;
+  const _b1=new Blob([html],{type:"text/html;charset=utf-8"});
+  const _a1=document.createElement("a"); _a1.href=URL.createObjectURL(_b1); _a1.target="_blank"; _a1.click();
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// 일할 계산기
+// ═══════════════════════════════════════════════════════════════════
+
+function prInit() {
+  const sel = document.getElementById('pr-client');
+  if (sel) {
+    sel.innerHTML = '<option value="">직접입력</option>';
+    clientsDB.forEach(c => { const o=document.createElement('option'); o.value=c.name; o.textContent=c.name; sel.appendChild(o); });
+  }
+  const now = new Date();
+  const ym = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+  const monthEl = document.getElementById('pr-month');
+  if (monthEl && !monthEl.value) monthEl.value = ym;
+  window._prDayData = {}; // 날짜별 근무 데이터 초기화
+  window._prSelectedDay = null;
+  prUpdateCalendar();
+}
+
+function prLoadPreset() {
+  const name = document.getElementById('pr-client')?.value;
+  const c = clientsDB.find(x=>x.name===name);
+  if (!c) return;
+  if (c.fee) document.getElementById('pr-hourly').value = c.fee;
+  prCalc();
+}
+
+function prIsHoliday(dateStr) {
+  const d = new Date(dateStr);
+  const dow = d.getDay();
+  if (dow === 0 || dow === 6) return 'weekend';
+  if (HOLIDAYS_2026.includes(dateStr)) return 'holiday';
+  return 'weekday';
+}
+
+function prUpdateCalendar() {
+  const ym = document.getElementById('pr-month')?.value;
+  if (!ym) return;
+  const joinDate = document.getElementById('pr-join-date')?.value;
+  const leaveDate = document.getElementById('pr-leave-date')?.value;
+  const [y,m] = ym.split('-').map(Number);
+  const totalDays = new Date(y, m, 0).getDate();
+  const firstDow = new Date(y, m-1, 1).getDay();
+  const dailyH = parseFloat(document.getElementById('pr-daily-hours')?.value||8)||8;
+
+  if (!window._prDayData) window._prDayData = {};
+
+  // 달력 HTML 생성
+  const dow_labels = ['일','월','화','수','목','금','토'];
+  let html = `<table style="width:100%;border-collapse:separate;border-spacing:3px;font-size:11px">
+    <thead><tr>${dow_labels.map((d,i)=>`<th style="text-align:center;padding:4px 2px;color:${i===0?'var(--danger)':i===6?'#60a5fa':'var(--text-muted)'};font-weight:600;font-size:10px">${d}</th>`).join('')}</tr></thead>
+    <tbody><tr>`;
+
+  for (let i=0; i<firstDow; i++) html += '<td></td>';
+
+  for (let day=1; day<=totalDays; day++) {
+    const dateStr = `${ym}-${String(day).padStart(2,'0')}`;
+    const type = prIsHoliday(dateStr);
+    const dow = (firstDow + day - 1) % 7;
+    const dd = window._prDayData[dateStr] || {};
+
+    // 제외 기간
+    let excluded = false;
+    if (joinDate && joinDate.startsWith(ym) && dateStr < joinDate) excluded = true;
+    if (leaveDate && leaveDate.startsWith(ym) && dateStr > leaveDate) excluded = true;
+
+    const isSelected = window._prSelectedDay === dateStr;
+    const isAbsent = dd.absent;
+    const hasData = dd.basic || dd.ot || dd.night || dd.hol;
+
+    // 셀 스타일 결정
+    let bg, border, textColor;
+    if (excluded) {
+      bg = 'rgba(100,116,139,0.08)'; border = 'transparent'; textColor = 'rgba(100,116,139,0.4)';
+    } else if (isAbsent) {
+      bg = 'rgba(239,68,68,0.08)'; border = 'rgba(239,68,68,0.3)'; textColor = 'var(--danger)';
+    } else if (type === 'holiday') {
+      bg = hasData ? 'rgba(239,68,68,0.2)' : 'rgba(239,68,68,0.06)';
+      border = 'rgba(239,68,68,0.25)'; textColor = 'var(--danger)';
+    } else if (type === 'weekend') {
+      bg = hasData ? 'rgba(96,165,250,0.15)' : 'transparent';
+      border = hasData ? 'rgba(96,165,250,0.3)' : 'rgba(100,116,139,0.1)';
+      textColor = dow===0 ? 'var(--danger)' : '#60a5fa';
+    } else {
+      // 평일
+      if (hasData) {
+        bg = 'rgba(99,102,241,0.12)'; border = 'rgba(99,102,241,0.3)'; textColor = 'var(--highlight)';
+      } else {
+        // 기본값으로 소정근로시간 자동 입력된 평일
+        bg = 'rgba(99,102,241,0.05)'; border = 'rgba(99,102,241,0.1)'; textColor = 'var(--text)';
+      }
+    }
+    if (isSelected) border = 'var(--highlight)';
+
+    // 시간 뱃지
+    let badges = '';
+    if (!excluded && !isAbsent) {
+      const bh = dd.basic !== undefined ? dd.basic : (type==='weekday' ? dailyH : 0);
+      if (bh) badges += `<div style="font-size:9px;color:${type==='weekday'?'var(--highlight)':'#60a5fa'};line-height:1">${bh}h</div>`;
+      if (dd.ot) badges += `<div style="font-size:9px;color:var(--warning);line-height:1">+${dd.ot}h</div>`;
+      if (dd.night) badges += `<div style="font-size:9px;color:var(--info);line-height:1">야${dd.night}h</div>`;
+      if (dd.hol) badges += `<div style="font-size:9px;color:var(--danger);line-height:1">휴${dd.hol}h</div>`;
+    }
+    if (isAbsent) badges = `<div style="font-size:9px;color:var(--danger)">결근</div>`;
+
+    const holidayMark = HOLIDAY_NAMES_2026[dateStr] ? `<div style="font-size:8px;color:var(--danger);line-height:1;white-space:nowrap;overflow:hidden">${HOLIDAY_NAMES_2026[dateStr].slice(0,4)}</div>` : '';
+
+    const clickable = !excluded ? `onclick="prSelectDay('${dateStr}')" style="cursor:pointer"` : '';
+
+    html += `<td ${clickable} style="vertical-align:top;padding:3px;border:1.5px solid ${border};border-radius:5px;background:${bg};color:${textColor};min-height:52px;${isSelected?'box-shadow:0 0 0 2px var(--highlight)':''}">
+      <div style="font-weight:700;font-size:12px;line-height:1.4">${day}</div>
+      ${holidayMark}
+      ${badges}
+    </td>`;
+
+    if (dow === 6 && day < totalDays) html += '</tr><tr>';
+  }
+
+  // 나머지 빈 칸
+  const lastDow = (firstDow + totalDays - 1) % 7;
+  if (lastDow < 6) for (let i=lastDow+1; i<=6; i++) html += '<td></td>';
+  html += '</tr></tbody></table>';
+
+  const cal = document.getElementById('pr-calendar');
+  if (cal) cal.innerHTML = html;
+  prCalc();
+}
+
+function prSelectDay(dateStr) {
+  window._prSelectedDay = dateStr;
+  if (!window._prDayData) window._prDayData = {};
+  const dd = window._prDayData[dateStr] || {};
+  const dailyH = parseFloat(document.getElementById('pr-daily-hours')?.value||8)||8;
+  const type = prIsHoliday(dateStr);
+
+  // 패널 표시
+  const panel = document.getElementById('pr-day-panel');
+  if (panel) panel.style.display = '';
+  const title = document.getElementById('pr-day-panel-title');
+  const [y,m,d] = dateStr.split('-');
+  const dayNames = ['일','월','화','수','목','금','토'];
+  const dow = new Date(dateStr).getDay();
+  const typeLabel = type==='holiday' ? ` 🔴${HOLIDAY_NAMES_2026[dateStr]||'공휴일'}` : type==='weekend' ? ' (주말)' : '';
+  if (title) title.textContent = `${m}월 ${d}일 (${dayNames[dow]})${typeLabel}`;
+
+  const basicEl = document.getElementById('pr-dp-basic');
+  const otEl = document.getElementById('pr-dp-ot');
+  const nightEl = document.getElementById('pr-dp-night');
+  const holEl = document.getElementById('pr-dp-hol');
+  const absentEl = document.getElementById('pr-dp-absent');
+
+  if (basicEl) basicEl.value = dd.basic !== undefined ? dd.basic : (type==='weekday' ? dailyH : 0);
+  if (otEl) otEl.value = dd.ot || 0;
+  if (nightEl) nightEl.value = dd.night || 0;
+  if (holEl) holEl.value = dd.hol || 0;
+  if (absentEl) absentEl.checked = !!dd.absent;
+
+  prUpdateCalendar();
+}
+
+function prDayApply() {
+  const dateStr = window._prSelectedDay;
+  if (!dateStr) return;
+  if (!window._prDayData) window._prDayData = {};
+  window._prDayData[dateStr] = {
+    basic: parseFloat(document.getElementById('pr-dp-basic')?.value||0)||0,
+    ot: parseFloat(document.getElementById('pr-dp-ot')?.value||0)||0,
+    night: parseFloat(document.getElementById('pr-dp-night')?.value||0)||0,
+    hol: parseFloat(document.getElementById('pr-dp-hol')?.value||0)||0,
+    absent: document.getElementById('pr-dp-absent')?.checked||false,
+  };
+  prUpdateCalendar();
+}
+
+function prDayClear() {
+  const dateStr = window._prSelectedDay;
+  if (!dateStr || !window._prDayData) return;
+  delete window._prDayData[dateStr];
+  ['pr-dp-basic','pr-dp-ot','pr-dp-night','pr-dp-hol'].forEach(id => { const el=document.getElementById(id); if(el) el.value=0; });
+  const ab = document.getElementById('pr-dp-absent'); if(ab) ab.checked=false;
+  prUpdateCalendar();
+}
+
+function prCloseDayPanel() {
+  window._prSelectedDay = null;
+  const panel = document.getElementById('pr-day-panel');
+  if (panel) panel.style.display = 'none';
+  prUpdateCalendar();
+}
+
+function prCalc() {
+  const ym = document.getElementById('pr-month')?.value;
+  if (!ym) return;
+
+  const ts = parseFloat(document.getElementById('pr-hourly')?.value||0)||10030;
+  const dailyH = parseFloat(document.getElementById('pr-daily-hours')?.value||0)||8;
+  const weeklyH = parseFloat(document.getElementById('pr-weekly-hours')?.value||0)||40;
+  const profR = (parseFloat(document.getElementById('pr-profit-rate')?.value||0)||10)/100;
+  const meal = parseFloat(document.getElementById('pr-meal')?.value||0)||0;
+  const trans = parseFloat(document.getElementById('pr-transport')?.value||0)||0;
+  const useWH = document.getElementById('pr-weekly-holiday')?.checked !== false;
+  const et = document.getElementById('pr-employ-type')?.value||'insurance4';
+  const joinDate = document.getElementById('pr-join-date')?.value;
+  const leaveDate = document.getElementById('pr-leave-date')?.value;
+
+  const [y,m] = ym.split('-').map(Number);
+  const totalDays = new Date(y, m, 0).getDate();
+
+  // 일할 기간
+  let workStartDay = 1, workEndDay = totalDays;
+  if (joinDate && joinDate.startsWith(ym)) workStartDay = parseInt(joinDate.split('-')[2]);
+  if (leaveDate && leaveDate.startsWith(ym)) workEndDay = parseInt(leaveDate.split('-')[2]);
+  const workDays = workEndDay - workStartDay + 1;
+  const ratio = workDays / totalDays;
+
+  // 달력 데이터 집계
+  const dd = window._prDayData || {};
+  let totalBasicH = 0, totalOtH = 0, totalNightH = 0, totalHolH = 0, absentDays = 0, actualWorkDays = 0;
+
+  for (let day=workStartDay; day<=workEndDay; day++) {
+    const dateStr = `${ym}-${String(day).padStart(2,'0')}`;
+    const type = prIsHoliday(dateStr);
+    const dayData = dd[dateStr];
+
+    if (dayData?.absent) { absentDays++; continue; }
+
+    if (type === 'weekday') {
+      // 평일: 기본값 dailyH, 커스텀 입력 있으면 덮어쓰기
+      const bh = dayData?.basic !== undefined ? dayData.basic : dailyH;
+      totalBasicH += bh;
+      if (bh > 0) actualWorkDays++;
+    }
+
+    if (dayData) {
+      if (type !== 'weekday' && dayData.basic) { totalBasicH += dayData.basic; actualWorkDays++; }
+      totalOtH += dayData.ot || 0;
+      totalNightH += dayData.night || 0;
+      totalHolH += dayData.hol || 0;
+    }
+  }
+
+  // 집계 요약 업데이트
+  const upd = (id, v) => { const el=document.getElementById(id); if(el) el.textContent=v; };
+  upd('pr-sum-days', actualWorkDays+'일');
+  upd('pr-sum-basic', totalBasicH+'h');
+  upd('pr-sum-ot', totalOtH+'h');
+  upd('pr-sum-night', totalNightH+'h');
+  upd('pr-sum-hol', totalHolH+'h');
+  upd('pr-sum-absent', absentDays+'일');
+
+  // 급여 계산
+  const basicPay = Math.round(ts * totalBasicH);
+  const otPay = Math.round(ts * totalOtH * 1.5);
+  const nightPay = Math.round(ts * totalNightH * 0.5);
+  const holPay = Math.round(ts * totalHolH * 1.5);
+
+  // 주휴수당 (일할 적용)
+  let weeklyHolPay = 0;
+  if (useWH && weeklyH >= 15) {
+    const fullWHP = ts * (weeklyH/40) * 8 * 4.345;
+    weeklyHolPay = Math.round(fullWHP * ratio);
+  }
+
+  // 결근 공제
+  const absentDeduct = Math.round(ts * dailyH * absentDays);
+
+  // 비과세 일할
+  const mealPro = Math.round(meal * ratio);
+  const transPro = Math.round(trans * ratio);
+
+  const taxable = basicPay + otPay + nightPay + holPay + weeklyHolPay - absentDeduct;
+  const nonTax = mealPro + transPro;
+  const gross = Math.max(0, taxable + nonTax);
+
+  // 공제
+  let deductEE=0, deductER=0, claimIns=0, insProft=0;
+  if (et==='insurance4') { deductEE=Math.round(taxable*INS4.ee); deductER=Math.round(taxable*INS4.er); }
+  else if (et==='income33') { deductEE=Math.round(taxable*0.033); }
+  else { deductEE=Math.round(taxable*0.033); claimIns=Math.round(taxable*INS4.er); insProft=claimIns; }
+
+  const net = Math.max(0, gross - deductEE);
+  const totalLabor = gross + deductER;
+  const billBase = Math.max(0, taxable + mealPro + transPro + (et==='insurance4_claim'?claimIns:0));
+  const billTotal = Math.round(billBase * (1+profR));
+  const vat = Math.round(billTotal * 0.1);
+  const profit = billTotal - totalLabor + insProft;
+  const profitPct = billTotal>0 ? profit/billTotal*100 : 0;
+
+  // 결과 렌더
+  const row = (l,v,c='') => `<div class="dc-row"><span class="dc-row-label">${l}</span><strong class="dc-row-val" style="color:${c||'var(--text)'}">${v}</strong></div>`;
+  const el = document.getElementById('pr-result');
+  if (!el) return;
+
+  const etLabel = et==='insurance4'?'4대보험':'3.3%';
+  el.innerHTML = `
+    <div style="background:var(--input-bg);border-radius:6px;padding:8px 10px;margin-bottom:10px">
+      <div style="font-size:10px;color:var(--text-muted);margin-bottom:4px">정산기간</div>
+      <div style="font-size:12px;font-weight:600">${workStartDay}일~${workEndDay}일 <span style="color:var(--highlight)">(${(ratio*100).toFixed(0)}%)</span></div>
+    </div>
+    ${row('기본급', basicPay.toLocaleString()+'원')}
+    ${otPay?row('연장수당 ×1.5', '+'+otPay.toLocaleString()+'원','var(--warning)'):''}
+    ${nightPay?row('야간수당 ×0.5', '+'+nightPay.toLocaleString()+'원','var(--info)'):''}
+    ${holPay?row('공휴일수당 ×1.5', '+'+holPay.toLocaleString()+'원','var(--danger)'):''}
+    ${weeklyHolPay?row('주휴수당', '+'+weeklyHolPay.toLocaleString()+'원','var(--success)'):''}
+    ${absentDeduct?row('결근공제', '-'+absentDeduct.toLocaleString()+'원','var(--danger)'):''}
+    ${mealPro?row('식대 비과세', mealPro.toLocaleString()+'원'):''}
+    ${transPro?row('교통비 비과세', transPro.toLocaleString()+'원'):''}
+    <div class="dc-total"><span>총 지급액</span><span style="color:var(--highlight)">${gross.toLocaleString()}원</span></div>
+    ${row('공제 ('+etLabel+')', '-'+deductEE.toLocaleString()+'원','var(--danger)')}
+    <div class="dc-total"><span>실수령액</span><span style="color:var(--success)">${net.toLocaleString()}원</span></div>
+    <div style="border-top:1px solid var(--border);margin-top:8px;padding-top:8px">
+    ${row('청구 공급가', billTotal.toLocaleString()+'원')}
+    ${row('VAT', vat.toLocaleString()+'원')}
+    ${row('VAT 포함', (billTotal+vat).toLocaleString()+'원','var(--highlight)')}
+    ${row('순이익', profit.toLocaleString()+'원', profit>=0?'var(--success)':'var(--danger)')}
+    ${row('이윤율', profitPct.toFixed(1)+'%', profitPct>=10?'var(--success)':'var(--warning)')}
+    </div>`;
+
+  window._prLast = { ym, name:document.getElementById('pr-name')?.value||'', client:document.getElementById('pr-client')?.value||'', workStartDay, workEndDay, workDays, ratio, actualWorkDays, absentDays, ts, gross, net, totalLabor, billTotal, vat, profit, profitPct, et, joinDate, leaveDate, totalBasicH, totalOtH, totalNightH, totalHolH };
+}
+
+function prSave() {
+  const r = window._prLast;
+  if (!r) { showToast('먼저 계산을 완료해주세요','warning'); return; }
+  const prId = genId();
+  const prContract = { id:prId, savedAt:new Date().toLocaleString('ko-KR'), client:r.client||'직접입력', pt:'일할계산', hr:r.ts, wk:1, et:r.et, billTotal:r.billTotal, billVat:r.billTotal+r.vat, profitPer:r.profit, totalProft:r.profit, profitPct:r.profitPct, d:r, isProrate:true };
+  dcContracts.unshift(prContract);
+  if (IS_CONNECTED) api('addContract', { id:prId, savedAt:prContract.savedAt, client:prContract.client, type:'일할계산', workers:1, employType:r.et, billTotal:r.billTotal, billVat:r.billTotal+r.vat, profit:r.profit, profitPct:r.profitPct, memo:r.name+' '+r.ym });
+  pushActivity('일할계산 저장: '+(r.client||'직접입력')+' '+r.name+' '+r.ym);
+  showToast('저장되었습니다','success');
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// 인원별 개별 계산
+// ═══════════════════════════════════════════════════════════════════
+var _multiWorkers = [];
+var _multiIdSeq = 0;
+
+function multiInit() {
+  const sel = document.getElementById('multi-client');
+  if (sel) {
+    sel.innerHTML = '<option value="">직접입력</option>';
+    clientsDB.forEach(c => { const o=document.createElement('option'); o.value=c.name; o.textContent=c.name; sel.appendChild(o); });
+  }
+  multiRender();
+}
+
+function multiLoadPreset() {
+  const name = document.getElementById('multi-client')?.value;
+  const c = clientsDB.find(x=>x.name===name);
+  if (!c) return;
+  multiCalcAll();
+}
+
+function multiAddWorker() {
+  _multiIdSeq++;
+  _multiWorkers.push({
+    id: _multiIdSeq,
+    name: '',
+    et: 'insurance4',
+    hourly: 10030,
+    basic: 209,
+    ot: 0,
+    night: 0,
+    hol: 0,
+    meal: 0,
+  });
+  multiRender();
+}
+
+function multiRemoveWorker(id) {
+  _multiWorkers = _multiWorkers.filter(w => w.id !== id);
+  multiRender();
+}
+
+function multiUpdate(id, field, val) {
+  const w = _multiWorkers.find(x=>x.id===id);
+  if (!w) return;
+  w[field] = field === 'name' || field === 'et' ? val : (parseFloat(val)||0);
+  multiCalcAll();
+}
+
+function multiCalcOne(w) {
+  const profR = (parseFloat(document.getElementById('multi-profit')?.value||10))||10;
+  const weeklyH = parseFloat(document.getElementById('multi-weekly-h')?.value||40)||40;
+  const mgmt = parseFloat(document.getElementById('multi-mgmt')?.value||0)||0;
+  const useWH = document.getElementById('multi-weekly-holiday')?.checked !== false;
+
+  const ts = w.hourly;
+  const basic = Math.round(ts * w.basic);
+  const ot = Math.round(ts * w.ot * 1.5);
+  const night = Math.round(ts * w.night * 0.5);
+  const hol = Math.round(ts * w.hol * 1.5);
+  const wkh = (useWH && weeklyH >= 15) ? Math.round(ts * (weeklyH/40) * 8 * 4.345) : 0;
+  const taxable = basic + ot + night + hol + wkh;
+  const gross = taxable + (w.meal||0);
+
+  let deductEE=0, deductER=0, insProft=0, claimIns=0;
+  if (w.et==='insurance4') { deductEE=Math.round(taxable*INS4.ee); deductER=Math.round(taxable*INS4.er); }
+  else if (w.et==='income33') { deductEE=Math.round(taxable*0.033); }
+  else { deductEE=Math.round(taxable*0.033); claimIns=Math.round(taxable*INS4.er); insProft=claimIns; }
+
+  const net = gross - deductEE;
+  const totalLabor = gross + deductER;
+  const billBase = taxable + (w.meal||0) + (w.et==='insurance4_claim'?claimIns:0);
+  const billTotal = Math.round((billBase * (1 + profR/100)) + mgmt/_multiWorkers.length);
+  const profit = billTotal - totalLabor + insProft;
+
+  return { gross, net, totalLabor, billTotal, profit, deductEE, deductER };
+}
+
+function multiCalcAll() {
+  multiRender();
+}
+
+function multiRender() {
+  const tbody = document.getElementById('multi-tbody');
+  if (!tbody) return;
+
+  if (_multiWorkers.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="13" style="text-align:center;color:var(--text-muted);padding:30px;font-size:12px">인원 추가 버튼을 눌러 시작하세요</td></tr>';
+    multiUpdateSummary([]);
+    return;
+  }
+
+  const etOpts = [
+    {v:'insurance4', l:'4대보험'},
+    {v:'income33', l:'3.3%'},
+    {v:'insurance4_claim', l:'3.3%+청구'},
+  ];
+
+  const results = [];
+  tbody.innerHTML = _multiWorkers.map(w => {
+    const r = multiCalcOne(w);
+    results.push(r);
+    const etSel = etOpts.map(o=>`<option value="${o.v}"${w.et===o.v?' selected':''}>${o.l}</option>`).join('');
+    const profitColor = r.profit >= 0 ? 'var(--success)' : 'var(--danger)';
+    return `<tr style="border-bottom:1px solid var(--border)">
+      <td style="padding:6px 4px"><input type="text" value="${w.name}" placeholder="이름" onchange="multiUpdate(${w.id},'name',this.value)" style="width:70px;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:11px;color:var(--text)"></td>
+      <td style="padding:6px 4px"><select onchange="multiUpdate(${w.id},'et',this.value)" style="background:var(--input-bg);border:1px solid var(--border);border-radius:4px;padding:4px 4px;font-size:11px;color:var(--text)">${etSel}</select></td>
+      <td style="padding:6px 4px"><input type="number" value="${w.hourly}" oninput="multiUpdate(${w.id},'hourly',this.value)" style="width:72px;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:11px;color:var(--text);text-align:right"></td>
+      <td style="padding:6px 4px"><input type="number" value="${w.basic}" oninput="multiUpdate(${w.id},'basic',this.value)" style="width:52px;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:11px;color:var(--text);text-align:right"></td>
+      <td style="padding:6px 4px"><input type="number" value="${w.ot}" oninput="multiUpdate(${w.id},'ot',this.value)" style="width:44px;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:11px;color:var(--warning);text-align:right"></td>
+      <td style="padding:6px 4px"><input type="number" value="${w.night}" oninput="multiUpdate(${w.id},'night',this.value)" style="width:44px;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:11px;color:var(--info);text-align:right"></td>
+      <td style="padding:6px 4px"><input type="number" value="${w.hol}" oninput="multiUpdate(${w.id},'hol',this.value)" style="width:44px;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:11px;color:var(--danger);text-align:right"></td>
+      <td style="padding:6px 4px"><input type="number" value="${w.meal||0}" oninput="multiUpdate(${w.id},'meal',this.value)" style="width:60px;background:var(--input-bg);border:1px solid var(--border);border-radius:4px;padding:4px 6px;font-size:11px;color:var(--text);text-align:right"></td>
+      <td style="padding:6px 8px;text-align:right;font-size:11px;white-space:nowrap">${r.gross.toLocaleString()}</td>
+      <td style="padding:6px 8px;text-align:right;font-size:11px;color:var(--success);white-space:nowrap">${r.net.toLocaleString()}</td>
+      <td style="padding:6px 8px;text-align:right;font-size:11px;color:var(--highlight);white-space:nowrap">${r.billTotal.toLocaleString()}</td>
+      <td style="padding:6px 8px;text-align:right;font-size:12px;font-weight:600;color:${profitColor};white-space:nowrap">${r.profit.toLocaleString()}</td>
+      <td style="padding:6px 4px;text-align:center"><button onclick="multiRemoveWorker(${w.id})" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:14px;padding:2px 6px" title="삭제">✕</button></td>
+    </tr>`;
+  }).join('');
+
+  multiUpdateSummary(results);
+}
+
+function multiUpdateSummary(results) {
+  const total = results.length;
+  const sumGross = results.reduce((a,r)=>a+r.gross,0);
+  const sumBill = results.reduce((a,r)=>a+r.billTotal,0);
+  const sumLabor = results.reduce((a,r)=>a+r.totalLabor,0);
+  const sumProfit = results.reduce((a,r)=>a+r.profit,0);
+
+  const upd = (id,v,c) => { const el=document.getElementById(id); if(el){ el.textContent=v; if(c) el.style.color=c; } };
+  upd('multi-sum-count', total+'명');
+  upd('multi-sum-gross', sumGross.toLocaleString()+'원');
+  upd('multi-sum-bill', sumBill.toLocaleString()+'원');
+  upd('multi-sum-labor', sumLabor.toLocaleString()+'원');
+  upd('multi-sum-profit', sumProfit.toLocaleString()+'원', sumProfit>=0?'var(--success)':'var(--danger)');
+}
+
+function multiExport() {
+  if (!_multiWorkers.length) { showToast('인원을 먼저 추가해주세요','warning'); return; }
+  const profR = parseFloat(document.getElementById('multi-profit')?.value||10)||10;
+  const client = document.getElementById('multi-client')?.value||'미입력';
+
+  const rows = _multiWorkers.map(w => {
+    const r = multiCalcOne(w);
+    const etLabel = w.et==='insurance4'?'4대보험':w.et==='income33'?'3.3%':'3.3%+청구';
+    return `<tr>
+      <td>${w.name||'—'}</td><td>${etLabel}</td>
+      <td style="text-align:right">${w.hourly.toLocaleString()}</td>
+      <td style="text-align:right">${w.basic}h</td>
+      <td style="text-align:right">${w.ot?w.ot+'h':'—'}</td>
+      <td style="text-align:right">${w.night?w.night+'h':'—'}</td>
+      <td style="text-align:right">${r.gross.toLocaleString()}</td>
+      <td style="text-align:right">${r.net.toLocaleString()}</td>
+      <td style="text-align:right;font-weight:700;color:#6366f1">${r.billTotal.toLocaleString()}</td>
+      <td style="text-align:right;font-weight:700;color:${r.profit>=0?'#16a34a':'#dc2626'}">${r.profit.toLocaleString()}</td>
+    </tr>`;
+  }).join('');
+
+  const results = _multiWorkers.map(w => multiCalcOne(w));
+  const totals = {
+    gross: results.reduce((a,r)=>a+r.gross,0),
+    bill: results.reduce((a,r)=>a+r.billTotal,0),
+    labor: results.reduce((a,r)=>a+r.totalLabor,0),
+    profit: results.reduce((a,r)=>a+r.profit,0),
+  };
+
+  const html3 = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>인원별 도급 견적서</title>
+  <style>*{color-scheme:light}body{font-family:'Malgun Gothic',sans-serif;padding:40px;max-width:900px;margin:0 auto;background:#fff;color:#1e293b}h2{color:#333;border-bottom:2px solid #6366f1;padding-bottom:8px}table{width:100%;border-collapse:collapse;margin:16px 0;font-size:12px}td,th{border:1px solid #ddd;padding:7px 10px;color:#1e293b}th{background:#f5f5f5;font-weight:600}.total-row{background:#eef2ff;font-weight:700;font-size:13px}@media print{button{display:none}}</style>
+  </head><body>
+  <h2>👥 인원별 도급 견적서</h2>
+  <p style="color:#666;font-size:12px">작성일: ${new Date().toLocaleDateString('ko-KR')} | 고객사: ${client} | ${_multiWorkers.length}인 | 이윤율: ${profR}%</p>
+  <table>
+    <thead><tr><th>이름</th><th>고용형태</th><th>시급</th><th>기본</th><th>연장</th><th>야간</th><th>총지급액</th><th>실수령액</th><th>청구금액</th><th>순이익</th></tr></thead>
+    <tbody>${rows}</tbody>
+    <tfoot><tr class="total-row">
+      <td colspan="6">합계 (${_multiWorkers.length}인)</td>
+      <td style="text-align:right">${totals.gross.toLocaleString()}</td>
+      <td></td>
+      <td style="text-align:right;color:#6366f1">${totals.bill.toLocaleString()}</td>
+      <td style="text-align:right;color:${totals.profit>=0?'#16a34a':'#dc2626'}">${totals.profit.toLocaleString()}</td>
+    </tr></tfoot>
+  </table>
+  <button onclick="window.print()" style="padding:8px 20px;background:#6366f1;color:#fff;border:none;border-radius:6px;cursor:pointer">🖨️ 인쇄</button>
+  </body></html>`;
+  const _b3=new Blob([html3],{type:"text/html;charset=utf-8"});
+  const _a3=document.createElement("a"); _a3.href=URL.createObjectURL(_b3); _a3.target="_blank"; _a3.click();
+}
+
+function multiSave() {
+  if (!_multiWorkers.length) { showToast('인원을 먼저 추가해주세요','warning'); return; }
+  const results = _multiWorkers.map(w => multiCalcOne(w));
+  const totalBill = results.reduce((a,r)=>a+r.billTotal,0);
+  const totalLabor = results.reduce((a,r)=>a+r.totalLabor,0);
+  const totalProfit = results.reduce((a,r)=>a+r.profit,0);
+  const profitPct = totalBill>0 ? totalProfit/totalBill*100 : 0;
+  const client = document.getElementById('multi-client')?.value||'직접입력';
+
+  const mId = genId();
+  const mContract = { id:mId, savedAt:new Date().toLocaleString('ko-KR'), client, pt:'인원별계산', hr:0, wk:_multiWorkers.length, et:'mixed', billTotal:totalBill, billVat:Math.round(totalBill*1.1), profitPer:Math.round(totalProfit/_multiWorkers.length), totalProft:totalProfit, profitPct, d:{ workers:JSON.parse(JSON.stringify(_multiWorkers)) }, isMulti:true };
+  dcContracts.unshift(mContract);
+  if (IS_CONNECTED) api('addContract', { id:mId, savedAt:mContract.savedAt, client, type:'인원별계산', workers:_multiWorkers.length, employType:'mixed', billTotal:totalBill, billVat:Math.round(totalBill*1.1), profit:totalProfit, profitPct, memo:_multiWorkers.map(w=>w.name).join(',') });
+  pushActivity('인원별계산 저장: '+client+' '+_multiWorkers.length+'인');
+  showToast(_multiWorkers.length+'인 계산이 저장되었습니다','success');
+}
+
+
+// ═══════════════════════════════════════════════════════════════════
+// 계약 → 세금계산서 연동
+// ═══════════════════════════════════════════════════════════════════
+var _contractInvoices = []; // 계약에서 발행된 세금계산서 목록
+
+function ciOpenModal(data) {
+  // data: { client, billTotal, vat, memo, source }
+  const now = new Date();
+  const ym = `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+
+  document.getElementById('ci-type').value = 'client';
+  document.getElementById('ci-target').value = data.client || '';
+  document.getElementById('ci-amount').value = data.billTotal || 0;
+  document.getElementById('ci-vat').value = data.vat || Math.round((data.billTotal||0)*0.1);
+  document.getElementById('ci-memo').value = data.memo || '';
+
+  const total = (data.billTotal||0) + (data.vat || Math.round((data.billTotal||0)*0.1));
+  document.getElementById('ci-summary').innerHTML = `
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:8px;text-align:center">
+      <div><div style="font-size:10px;color:var(--text-muted)">출처</div><strong style="font-size:11px">${data.source||'계약 계산기'}</strong></div>
+      <div><div style="font-size:10px;color:var(--text-muted)">공급가액</div><strong style="font-size:13px;color:var(--highlight)">${(data.billTotal||0).toLocaleString()}원</strong></div>
+      <div><div style="font-size:10px;color:var(--text-muted)">청구 합계</div><strong style="font-size:13px;color:var(--success)">${total.toLocaleString()}원</strong></div>
+    </div>`;
+
+  document.getElementById('modal-contract-invoice').style.display = 'flex';
+}
+
+function ciUpdateVat() {
+  const amt = parseFloat(document.getElementById('ci-amount')?.value||0)||0;
+  document.getElementById('ci-vat').value = Math.round(amt * 0.1);
+}
+
+function ciConfirm() {
+  const type = document.getElementById('ci-type').value;
+  const target = document.getElementById('ci-target').value.trim();
+  const amount = parseFloat(document.getElementById('ci-amount').value||0)||0;
+  const vat = parseFloat(document.getElementById('ci-vat').value||0)||0;
+  const now2 = new Date();
+  const month = (document.getElementById('invoice-month-filter')?.value) ||
+    `${now2.getFullYear()}-${String(now2.getMonth()+1).padStart(2,'0')}`;
+  const memo = document.getElementById('ci-memo').value;
+
+  if (!target) { showToast('대상을 입력해주세요','warning'); return; }
+  if (!amount) { showToast('금액을 입력해주세요','warning'); return; }
+
+  const inv = {
+    id: genId(),
+    type,
+    target,
+    amount,
+    vat,
+    total: amount + vat,
+    month,
+    memo,
+    issuedAt: new Date().toLocaleString('ko-KR'),
+    status: { issued: false, paid: false },
+  };
+
+  _contractInvoices.unshift(inv);
+
+  // Sheets 동기화
+  if (IS_CONNECTED) {
+    api('addInvoice', {
+      type,
+      clientName: type === 'client' ? target : '',
+      partnerName: type === 'partner' ? target : '',
+      amount,
+      vat,
+      total: amount + vat,
+      issueDate: new Date().toISOString().slice(0,10),
+      status: 'pending',
+      memo: `[계약연동] ${memo}`,
+    });
+  }
+
+  document.getElementById('modal-contract-invoice').style.display = 'none';
+  pushActivity(`세금계산서 발행: ${target} ${amount.toLocaleString()}원`);
+  showToast(`${target} 세금계산서가 발행되었습니다`, 'success');
+
+  // 세금계산서 탭으로 이동
+  showConfirm('세금계산서 탭에서 확인하시겠습니까?', () => {
+    showPage('billing', document.getElementById('nav-billing'));
+    setTimeout(() => setBillingTab('settle'), 100);
+  });
+}
+
+// 도급 계산기 → 세금계산서
+function dcSendToInvoice() {
+  const r = window._dcLast;
+  if (!r) { showToast('먼저 계산을 완료해주세요','warning'); return; }
+  ciOpenModal({
+    client: r.client || '',
+    billTotal: r.billTotal,
+    vat: Math.round(r.billTotal * 0.1),
+    memo: `도급계산기 (${r.wk}인, 이윤율${Math.round(r.profR*100)}%)`,
+    source: '도급 계산기',
+  });
+}
+
+// 일할계산 → 세금계산서
+function prSendToInvoice() {
+  const r = window._prLast;
+  if (!r) { showToast('먼저 계산을 완료해주세요','warning'); return; }
+  ciOpenModal({
+    client: r.client || '',
+    billTotal: r.billTotal,
+    vat: r.vat,
+    memo: `일할계산 ${r.ym} ${r.workStartDay}일~${r.workEndDay}일 ${r.name||''}`,
+    source: '일할 계산기',
+  });
+}
+
+// 인원별 계산 → 세금계산서
+function multiSendToInvoice() {
+  if (!_multiWorkers.length) { showToast('인원을 먼저 추가해주세요','warning'); return; }
+  const results = _multiWorkers.map(w => multiCalcOne(w));
+  const totalBill = results.reduce((a,r)=>a+r.billTotal,0);
+  const client = document.getElementById('multi-client')?.value || '';
+  ciOpenModal({
+    client,
+    billTotal: totalBill,
+    vat: Math.round(totalBill * 0.1),
+    memo: `인원별계산 ${_multiWorkers.length}인`,
+    source: '인원별 계산기',
+  });
+}
+
+// 계약 발행 내역 모달
+function openContractInvoiceList() {
+  const modal = document.getElementById('modal-contract-invoice-list');
+  const content = document.getElementById('ci-list-content');
+  if (!content) return;
+
+  if (!_contractInvoices.length) {
+    content.innerHTML = '<div style="text-align:center;padding:40px;color:var(--text-muted);font-size:13px">계약에서 발행된 세금계산서가 없습니다.</div>';
+  } else {
+    const typeLabel = { client:'고객사 청구', partner:'협력사 지급' };
+    content.innerHTML = `<table style="width:100%;border-collapse:collapse;font-size:12px">
+      <thead><tr style="border-bottom:2px solid var(--border)">
+        <th style="padding:8px;text-align:left;color:var(--text-muted);font-size:11px">발행일시</th>
+        <th style="padding:8px;text-align:left;color:var(--text-muted);font-size:11px">유형</th>
+        <th style="padding:8px;text-align:left;color:var(--text-muted);font-size:11px">대상</th>
+        <th style="padding:8px;text-align:right;color:var(--text-muted);font-size:11px">공급가</th>
+        <th style="padding:8px;text-align:right;color:var(--text-muted);font-size:11px">VAT</th>
+        <th style="padding:8px;text-align:right;color:var(--text-muted);font-size:11px">합계</th>
+        <th style="padding:8px;text-align:left;color:var(--text-muted);font-size:11px">월</th>
+        <th style="padding:8px;text-align:left;color:var(--text-muted);font-size:11px">발행</th>
+        <th style="padding:8px;text-align:left;color:var(--text-muted);font-size:11px">입금</th>
+        <th style="padding:8px"></th>
+      </tr></thead>
+      <tbody>${_contractInvoices.map((inv,i) => `
+        <tr style="border-bottom:1px solid var(--border)">
+          <td style="padding:8px;font-size:10px;color:var(--text-muted)">${inv.issuedAt}</td>
+          <td style="padding:8px"><span class="badge ${inv.type==='client'?'badge-info':'badge-warning'}" style="font-size:10px">${typeLabel[inv.type]||inv.type}</span></td>
+          <td style="padding:8px;font-weight:600">${inv.target}</td>
+          <td style="padding:8px;text-align:right">${inv.amount.toLocaleString()}</td>
+          <td style="padding:8px;text-align:right;color:var(--text-muted)">${inv.vat.toLocaleString()}</td>
+          <td style="padding:8px;text-align:right;font-weight:700;color:var(--highlight)">${inv.total.toLocaleString()}</td>
+          <td style="padding:8px;font-size:11px">${inv.month}</td>
+          <td style="padding:8px;text-align:center">
+            <label style="cursor:pointer;font-size:11px">
+              <input type="checkbox" ${inv.status.issued?'checked':''} onchange="_contractInvoices[${i}].status.issued=this.checked;openContractInvoiceList()" style="accent-color:var(--highlight)"> 완료
+            </label>
+          </td>
+          <td style="padding:8px;text-align:center">
+            <label style="cursor:pointer;font-size:11px">
+              <input type="checkbox" ${inv.status.paid?'checked':''} onchange="_contractInvoices[${i}].status.paid=this.checked;openContractInvoiceList()" style="accent-color:var(--success)"> 완료
+            </label>
+          </td>
+          <td style="padding:8px;text-align:center">
+            <button onclick="_contractInvoices.splice(${i},1);openContractInvoiceList()" style="background:none;border:none;cursor:pointer;color:var(--text-muted);font-size:13px">🗑️</button>
+          </td>
+        </tr>`).join('')}
+      </tbody>
+    </table>`;
+  }
+
+  modal.style.display = 'flex';
+}
+
+
+// ─── 인원 불러오기 ──────────────────────────────────────────────────
+var _multiImportMode = 'hiring'; // 'hiring' | 'pool'
+var _multiImportSelected = new Set();
+var _multiImportData = [];
+
+function multiOpenImport(mode) {
+  _multiImportMode = mode;
+  _multiImportSelected = new Set();
+  document.getElementById('multi-import-search').value = '';
+  document.getElementById('multi-import-count').textContent = '0명';
+
+  const title = document.getElementById('multi-import-title');
+  if (title) title.textContent = mode === 'hiring' ? '📋 채용목록에서 불러오기' : '👤 인재풀에서 불러오기';
+
+  // 데이터 구성
+  if (mode === 'hiring') {
+    // 근무중인 채용 목록
+    _multiImportData = rpoContracts
+      .filter(r => r.status === '근무중')
+      .map(r => {
+        const c = candidateDB[r.name] || {};
+        // 시급 역산: fee가 있으면 월급 / 209
+        const hourly = r.fee ? Math.round(r.fee / 209) : 10030;
+        return {
+          name: r.name,
+          client: r.client || c.client || '—',
+          partner: r.partner || c.partner || '직접',
+          hourly,
+          status: r.status,
+          gender: c.gender || '—',
+          age: c.ageText || '—',
+          et: 'insurance4',
+        };
+      });
+  } else {
+    // 인재풀 전체
+    _multiImportData = Object.entries(candidateDB)
+      .filter(([name, c]) => c && name)
+      .map(([name, c]) => ({
+        name,
+        client: c.client || c.assignedClient || '—',
+        partner: c.partner || c.assignedPartner || '직접',
+        hourly: 10030,
+        status: c.status || '구직중',
+        gender: c.gender || '—',
+        age: c.ageText || '—',
+        et: 'insurance4',
+      }));
+  }
+
+  multiImportFilter();
+  document.getElementById('modal-multi-import').style.display = 'flex';
+}
+
+function multiImportFilter() {
+  const q = (document.getElementById('multi-import-search')?.value || '').toLowerCase();
+  const filtered = q ? _multiImportData.filter(d => d.name.toLowerCase().includes(q) || d.client.toLowerCase().includes(q)) : _multiImportData;
+
+  const tbody = document.getElementById('multi-import-tbody');
+  if (!tbody) return;
+
+  if (!filtered.length) {
+    tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;padding:24px;color:var(--text-muted);font-size:12px">${_multiImportMode === 'hiring' ? '근무중인 인원이 없습니다' : '인재풀이 비어있습니다'}</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(d => {
+    const checked = _multiImportSelected.has(d.name);
+    const statusColor = d.status === '근무중' ? 'var(--success)' : d.status === '구직중' ? 'var(--info)' : 'var(--text-muted)';
+    return `<tr style="border-bottom:1px solid var(--border);cursor:pointer" onclick="multiImportToggle('${d.name}',this)">
+      <td style="padding:8px;text-align:center">
+        <input type="checkbox" ${checked?'checked':''} style="accent-color:var(--highlight)" onclick="event.stopPropagation();multiImportToggle('${d.name}',this.closest('tr'))">
+      </td>
+      <td style="padding:8px;font-weight:600">${d.name}</td>
+      <td style="padding:8px;font-size:11px;color:var(--text-muted)">${d.client}</td>
+      <td style="padding:8px;font-size:11px;color:var(--text-muted)">${d.partner}</td>
+      <td style="padding:8px;text-align:right;font-size:11px">${d.hourly.toLocaleString()}원</td>
+      <td style="padding:8px"><span style="font-size:10px;color:${statusColor}">${d.status}</span></td>
+    </tr>`;
+  }).join('');
+}
+
+function multiImportToggle(name, row) {
+  if (_multiImportSelected.has(name)) {
+    _multiImportSelected.delete(name);
+    if (row) row.style.background = '';
+  } else {
+    _multiImportSelected.add(name);
+    if (row) row.style.background = 'rgba(99,102,241,0.07)';
+  }
+  const cnt = document.getElementById('multi-import-count');
+  if (cnt) cnt.textContent = _multiImportSelected.size + '명';
+
+  // 체크박스 상태 동기화
+  const cb = row?.querySelector('input[type="checkbox"]');
+  if (cb) cb.checked = _multiImportSelected.has(name);
+}
+
+function multiImportConfirm() {
+  if (!_multiImportSelected.size) { showToast('인원을 선택해주세요','warning'); return; }
+
+  _multiImportSelected.forEach(name => {
+    // 이미 추가된 인원 스킵
+    if (_multiWorkers.find(w => w.name === name)) return;
+
+    const d = _multiImportData.find(x => x.name === name);
+    if (!d) return;
+
+    _multiIdSeq++;
+    _multiWorkers.push({
+      id: _multiIdSeq,
+      name: d.name,
+      et: d.et || 'insurance4',
+      hourly: d.hourly || 10030,
+      basic: 209,
+      ot: 0,
+      night: 0,
+      hol: 0,
+      meal: 0,
+    });
+  });
+
+  document.getElementById('modal-multi-import').style.display = 'none';
+  multiRender();
+  showToast(_multiImportSelected.size + '명이 추가되었습니다', 'success');
+}
+
+
+// ─── 일할계산 인원 불러오기 ───────────────────────────────────────────
+function prOpenImport(mode) {
+  // 인원별 계산의 multiOpenImport 모달 재활용
+  // 단, 선택 후 동작이 다름 (단일 선택 → 이름/고객사 자동 입력)
+  _multiImportMode = mode;
+  _multiImportSelected = new Set();
+  document.getElementById('multi-import-search').value = '';
+  document.getElementById('multi-import-count').textContent = '0명';
+
+  const title = document.getElementById('multi-import-title');
+  if (title) title.textContent = mode === 'hiring' ? '📋 채용목록에서 불러오기 (1명 선택)' : '👤 인재풀에서 불러오기 (1명 선택)';
+
+  if (mode === 'hiring') {
+    _multiImportData = rpoContracts
+      .filter(r => r.status === '근무중')
+      .map(r => {
+        const c = candidateDB[r.name] || {};
+        const hourly = r.fee ? Math.round(r.fee / 209) : 10030;
+        return { name: r.name, client: r.client||c.client||'—', partner: r.partner||'직접', hourly, status: r.status, gender: c.gender||'—', age: c.ageText||'—', et: 'insurance4' };
+      });
+  } else {
+    _multiImportData = Object.entries(candidateDB)
+      .filter(([name, c]) => c && name)
+      .map(([name, c]) => ({ name, client: c.client||c.assignedClient||'—', partner: c.partner||'직접', hourly: 10030, status: c.status||'구직중', gender: c.gender||'—', age: c.ageText||'—', et: 'insurance4' }));
+  }
+
+  // 확인 버튼 동작을 일할계산용으로 임시 교체
+  window._prImportMode = true;
+  multiImportFilter();
+  document.getElementById('modal-multi-import').style.display = 'flex';
+}
+
+// multiImportConfirm 오버라이드 - 일할계산 모드일 때 분기
+const _origMultiImportConfirm = window.multiImportConfirm || function(){};
+window.multiImportConfirm = function() {
+  if (window._prImportMode) {
+    window._prImportMode = false;
+    if (!_multiImportSelected.size) { showToast('인원을 선택해주세요','warning'); return; }
+    const name = [..._multiImportSelected][0]; // 첫 번째 선택만
+    const d = _multiImportData.find(x => x.name === name);
+    if (!d) return;
+
+    // 일할계산 필드에 자동 입력
+    const nameEl = document.getElementById('pr-name');
+    const clientEl = document.getElementById('pr-client');
+    const hourlyEl = document.getElementById('pr-hourly');
+    const etEl = document.getElementById('pr-employ-type');
+
+    if (nameEl) nameEl.value = d.name;
+    if (hourlyEl) hourlyEl.value = d.hourly;
+    if (etEl) etEl.value = d.et || 'insurance4';
+
+    // 고객사 드롭다운 선택
+    if (clientEl) {
+      const opt = Array.from(clientEl.options).find(o => o.value === d.client);
+      if (opt) clientEl.value = d.client;
+      else clientEl.value = '';
+    }
+
+    document.getElementById('modal-multi-import').style.display = 'none';
+    prCalc();
+    showToast(d.name + '님 정보가 입력되었습니다', 'success');
+  } else {
+    // 인원별 계산 모드
+    if (!_multiWorkers) return;
+    if (!_multiImportSelected.size) { showToast('인원을 선택해주세요','warning'); return; }
+    _multiImportSelected.forEach(name => {
+      if (_multiWorkers.find(w => w.name === name)) return;
+      const d = _multiImportData.find(x => x.name === name);
+      if (!d) return;
+      _multiIdSeq++;
+      _multiWorkers.push({ id: _multiIdSeq, name: d.name, et: d.et||'insurance4', hourly: d.hourly||10030, basic: 209, ot: 0, night: 0, hol: 0, meal: 0 });
+    });
+    document.getElementById('modal-multi-import').style.display = 'none';
+    multiRender();
+    showToast(_multiImportSelected.size + '명이 추가되었습니다', 'success');
+  }
+};
+
 </script>
 
 
