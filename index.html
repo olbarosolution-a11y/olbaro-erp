@@ -2027,7 +2027,7 @@ async function loadCandidates() {
   while (keepGoing) {
     var batchResult = await api('getCandidates', { page: currentPage, pageSize: batchSize });
     if (!batchResult || !batchResult.success) { keepGoing = false; break; }
-    var batchItems = batchResult.data || [];
+    var batchItems = batchResult.items || [];
     for (var bi = 0; bi < batchItems.length; bi++) { allCandidates.push(batchItems[bi]); }
     keepGoing = !!batchResult.hasMore;
     currentPage++;
